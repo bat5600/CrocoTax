@@ -1,0 +1,23 @@
+{
+  "tenantId": "tenant_demo",
+  "invoiceNumber": "INV-2026-0001",
+  "issueDate": "2026-01-25",
+  "currency": "EUR",
+  "totalAmount": 120.0,
+  "buyer": {
+    "name": "Acme Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "CrocoClick Demo",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Subscription",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 0.2
+    }
+  ]
+}

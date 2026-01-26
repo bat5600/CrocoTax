@@ -1,0 +1,23 @@
+{
+  "eventId": "evt_123",
+  "invoiceId": "inv_123",
+  "updatedAt": "2026-01-25T12:00:00Z",
+  "currency": "EUR",
+  "totalAmount": 120.0,
+  "customer": {
+    "name": "Acme Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "CrocoClick Demo",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Subscription",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 0.2
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@croco/core": ["packages/core/src/index.ts"],
+      "@croco/db": ["packages/db/src/index.ts"],
+      "@croco/queue": ["packages/queue/src/index.ts"],
+      "@croco/ghl": ["packages/ghl/src/index.ts"],
+      "@croco/facturx": ["packages/facturx/src/index.ts"],
+      "@croco/pdp": ["packages/pdp/src/index.ts"],
+      "@croco/storage": ["packages/storage/src/index.ts"],
+      "@croco/audit": ["packages/audit/src/index.ts"],
+      "@croco/config": ["packages/config/src/index.ts"],
+      "@croco/observability": ["packages/observability/src/index.ts"]
+    }
+  },
+  "include": ["apps", "packages", "scripts", "tests"]
+}
