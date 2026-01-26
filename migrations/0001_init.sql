@@ -1,3 +1,5 @@
+BEGIN;
+
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE tenants (
@@ -102,3 +104,5 @@ CREATE TABLE audit_log (
 );
 
 CREATE INDEX audit_log_tenant_idx ON audit_log (tenant_id, created_at DESC);
+
+COMMIT;

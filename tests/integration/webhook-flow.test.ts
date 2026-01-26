@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
-import { PostgreSqlContainer } from "testcontainers";
+import { GenericContainer, Wait } from "testcontainers";
+import type { StartedTestContainer } from "testcontainers";
 import { runMigrations } from "../../scripts/migrate";
 import { seedDemoTenant } from "../../scripts/seed";
 import { getPool, closePool } from "@croco/db";
@@ -13,19 +14,31 @@ import { join } from "path";
 const logger = createLogger();
 
 describe("webhook -> job -> audit", () => {
-  let container: PostgreSqlContainer;
+  let container: StartedTestContainer | undefined;
   let tenantId: string;
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer("postgres:15").start();
-    process.env.DATABASE_URL = container.getConnectionUri();
+    container = await new GenericContainer("postgres:15")
+      .withEnvironment({
+        POSTGRES_USER: "croco",
+        POSTGRES_PASSWORD: "croco",
+        POSTGRES_DB: "croco"
+      })
+      .withExposedPorts(5432)
+      .withWaitStrategy(Wait.forLogMessage("database system is ready to accept connections"))
+      .start();
+
+    const host = container.getHost();
+    const port = container.getMappedPort(5432);
+    process.env.DATABASE_URL = `postgresql://croco:croco@${host}:${port}/croco`;
+
     await runMigrations();
     tenantId = await seedDemoTenant();
   });
 
   afterAll(async () => {
     await closePool();
-    await container.stop();
+    await container?.stop();
   });
 
   it("enqueues a job and writes an audit event", async () => {

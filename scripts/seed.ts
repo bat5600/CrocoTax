@@ -1,9 +1,10 @@
-import { getPool, closePool } from "@croco/db";
+import { getPool, closePool, waitForDatabase } from "@croco/db";
 import { loadEnvFile } from "@croco/config";
 
 export async function seedDemoTenant(): Promise<string> {
   loadEnvFile();
   const pool = getPool();
+  await waitForDatabase(pool);
   const tenantResult = await pool.query(
     "INSERT INTO tenants (name, status, config) VALUES ($1, 'active', $2) RETURNING id",
     ["Demo Tenant", { webhook_secret: "demo-secret" }]
