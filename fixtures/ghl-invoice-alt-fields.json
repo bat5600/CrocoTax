@@ -1,0 +1,26 @@
+{
+  "id": "inv_alt_001",
+  "number": "ALT-2026-0042",
+  "date": "2026-01-20",
+  "currencyCode": "usd",
+  "amount": "250.50",
+  "customer": {
+    "fullName": "Alt Buyer",
+    "countryCode": "us"
+  },
+  "company": "Alt Seller Inc",
+  "items": [
+    {
+      "title": "Service A",
+      "qty": "2",
+      "price": "100",
+      "vatRate": "0.1"
+    },
+    {
+      "label": "Service B",
+      "quantity": 1,
+      "amount": 50.5,
+      "tax": 0
+    }
+  ]
+}

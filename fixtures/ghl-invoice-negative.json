@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_neg_001",
+  "invoiceNumber": "NEG-2026-0002",
+  "issueDate": "2026-01-21",
+  "currency": "eur",
+  "totalAmount": 100,
+  "customer": {
+    "name": "Negative Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Negative Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Bad line",
+      "quantity": -3,
+      "unitPrice": -10,
+      "taxRate": -0.2
+    }
+  ]
+}

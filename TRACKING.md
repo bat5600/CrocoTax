@@ -104,3 +104,24 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 ## Current Risks / Notes
 - `testcontainers` may require pulling `testcontainers/ryuk` once; with poor network, use `TESTCONTAINERS_RYUK_DISABLED=true`.
 - Docker daemon permissions vary by environment; ensure Docker Desktop WSL integration is enabled.
+
+### 2026-01-27
+- **What changed**: Added `README.md` with local setup, dev, and test instructions.
+- **Why**: Make M0 runnable and document the expected local workflow.
+- **Impact/Risk**: Documentation only; no runtime behavior changes.
+- **Verification**: Not run (docs update).
+
+- **What changed**: Made `migrations/0001_init.sql` idempotent with `IF NOT EXISTS` for tables/indexes.
+- **Why**: Allow `npm run migrate` to succeed when schema exists but `schema_migrations` is empty (M0 repeatability).
+- **Impact/Risk**: Schema creation becomes re-runnable; no runtime behavior changes expected.
+- **Verification**: `docker compose up -d`, `npm run migrate`, `npm run seed`, `npm test`.
+
+- **What changed**: Expanded GHL mapping fixtures and added unit tests; normalized currency and clamped negative line values in mapper.
+- **Why**: Progress M1 by covering alternate inputs and validation edge cases.
+- **Impact/Risk**: Mapper now normalizes currency and prevents invalid line values; low risk to behavior.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.
+
+- **What changed**: Tightened canonical schema to require YYYY-MM-DD issue dates and normalized date/currency in GHL mapper; updated unit expectations.
+- **Why**: Improve M1 validation and ensure canonical dates are compliant.
+- **Impact/Risk**: Canonical issueDate now normalized to date-only; downstream consumers should expect YYYY-MM-DD.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.

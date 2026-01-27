@@ -22,9 +22,16 @@ function asNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
-function asDate(value: unknown): string {
+function normalizeDate(value: unknown): string {
   if (typeof value === "string" && value.trim()) {
-    return value;
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      return trimmed.slice(0, 10);
+    }
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return new Date(parsed).toISOString().slice(0, 10);
+    }
   }
   return new Date().toISOString().slice(0, 10);
 }
@@ -46,6 +53,14 @@ function normalizeCountry(value: unknown): string {
   return "FR";
 }
 
+function normalizeCurrency(value: unknown): string {
+  const raw = asString(value, "EUR").toUpperCase();
+  if (raw.length === 3) {
+    return raw;
+  }
+  return "EUR";
+}
+
 function extractLines(input: Record<string, unknown>): CanonicalInvoice["lines"] {
   const rawLines =
     (Array.isArray(input.lines) && input.lines) ||
@@ -55,14 +70,17 @@ function extractLines(input: Record<string, unknown>): CanonicalInvoice["lines"]
 
   const mapped = rawLines.map((line) => {
     const row = line as Record<string, unknown>;
+    const quantity = asNumber(pick(row.quantity, row.qty), 1);
+    const unitPrice = asNumber(pick(row.unitPrice, row.price, row.amount), 0);
+    const taxRate = asNumber(pick(row.taxRate, row.vatRate, row.tax), 0);
     return {
       description: asString(
         pick(row.description, row.name, row.title, row.label),
         "Item"
       ),
-      quantity: asNumber(pick(row.quantity, row.qty), 1),
-      unitPrice: asNumber(pick(row.unitPrice, row.price, row.amount), 0),
-      taxRate: asNumber(pick(row.taxRate, row.vatRate, row.tax), 0)
+      quantity: quantity > 0 ? quantity : 1,
+      unitPrice: unitPrice >= 0 ? unitPrice : 0,
+      taxRate: taxRate >= 0 ? taxRate : 0
     };
   });
 
@@ -85,8 +103,8 @@ export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): Canonica
     pick(record.invoiceNumber, record.number, record.invoice_id, record.id),
     "INV-UNKNOWN"
   );
-  const issueDate = asDate(pick(record.issueDate, record.date, record.updatedAt));
-  const currency = asString(pick(record.currency, record.currencyCode), "EUR");
+  const issueDate = normalizeDate(pick(record.issueDate, record.date, record.updatedAt));
+  const currency = normalizeCurrency(pick(record.currency, record.currencyCode));
 
   const buyer = record.customer as Record<string, unknown> | undefined;
   const seller = record.seller as Record<string, unknown> | undefined;

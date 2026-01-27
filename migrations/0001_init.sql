@@ -2,7 +2,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   status text NOT NULL DEFAULT 'active',
@@ -11,7 +11,7 @@ CREATE TABLE tenants (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE tenant_secrets (
+CREATE TABLE IF NOT EXISTS tenant_secrets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   ghl_api_key_enc text,
@@ -23,7 +23,7 @@ CREATE TABLE tenant_secrets (
   UNIQUE (tenant_id)
 );
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   ghl_invoice_id text NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE invoices (
   UNIQUE (tenant_id, ghl_invoice_id)
 );
 
-CREATE TABLE invoice_artifacts (
+CREATE TABLE IF NOT EXISTS invoice_artifacts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   pdf_key text,
@@ -45,7 +45,7 @@ CREATE TABLE invoice_artifacts (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE pdp_submissions (
+CREATE TABLE IF NOT EXISTS pdp_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -58,7 +58,7 @@ CREATE TABLE pdp_submissions (
   UNIQUE (provider, submission_id)
 );
 
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid REFERENCES tenants(id) ON DELETE SET NULL,
   type text NOT NULL,
@@ -77,9 +77,9 @@ CREATE TABLE jobs (
   UNIQUE (tenant_id, type, idempotency_key)
 );
 
-CREATE INDEX jobs_run_at_idx ON jobs (status, run_at);
+CREATE INDEX IF NOT EXISTS jobs_run_at_idx ON jobs (status, run_at);
 
-CREATE TABLE idempotency_keys (
+CREATE TABLE IF NOT EXISTS idempotency_keys (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   step text NOT NULL,
@@ -90,7 +90,7 @@ CREATE TABLE idempotency_keys (
   UNIQUE (tenant_id, step, idempotency_key)
 );
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   correlation_id text NOT NULL,
@@ -103,6 +103,6 @@ CREATE TABLE audit_log (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX audit_log_tenant_idx ON audit_log (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_tenant_idx ON audit_log (tenant_id, created_at DESC);
 
 COMMIT;
