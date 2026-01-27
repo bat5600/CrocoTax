@@ -8,30 +8,10 @@ export type InvoiceStatus =
   | "GENERATED"
   | "SUBMITTED"
   | "SYNCED"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "PAID"
   | "ERROR";
-
-export interface CanonicalInvoice {
-  id?: string;
-  tenantId: TenantId;
-  invoiceNumber: string;
-  issueDate: string;
-  currency: string;
-  totalAmount: number;
-  buyer: {
-    name: string;
-    country: string;
-  };
-  seller: {
-    name: string;
-    country: string;
-  };
-  lines: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    taxRate: number;
-  }>;
-}
 
 export interface AuditEvent {
   tenantId: TenantId;

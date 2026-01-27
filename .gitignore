@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+storage/
+tmp/
 
 # Local env (keep .env.example committed)
 .env

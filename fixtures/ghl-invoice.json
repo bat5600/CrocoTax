@@ -1,6 +1,8 @@
 {
   "eventId": "evt_123",
   "invoiceId": "inv_123",
+  "invoiceNumber": "INV-2026-0001",
+  "issueDate": "2026-01-25",
   "updatedAt": "2026-01-25T12:00:00Z",
   "currency": "EUR",
   "totalAmount": 120.0,

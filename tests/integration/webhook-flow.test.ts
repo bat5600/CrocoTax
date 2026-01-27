@@ -8,6 +8,10 @@ import { DbQueue } from "@croco/queue";
 import { buildServer } from "../../apps/api/src/server";
 import { createLogger } from "@croco/observability";
 import { processOnce } from "../../apps/worker/src/worker";
+import { createGhlClient } from "@croco/ghl";
+import { createFacturxGenerator } from "@croco/facturx";
+import { createStorageClient } from "@croco/storage";
+import { createPdpClient } from "@croco/pdp";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -18,6 +22,11 @@ describe("webhook -> job -> audit", () => {
   let tenantId: string;
 
   beforeAll(async () => {
+    process.env.FACTURX_MODE = "stub";
+    process.env.STORAGE_MODE = "filesystem";
+    process.env.STORAGE_LOCAL_PATH = join(process.cwd(), "tmp", "storage-test");
+    process.env.PDP_PROVIDER = "mock";
+
     container = await new GenericContainer("postgres:15")
       .withEnvironment({
         POSTGRES_USER: "croco",
@@ -46,6 +55,10 @@ describe("webhook -> job -> audit", () => {
     const queue = new DbQueue(pool, logger);
     const app = buildServer({ logger, pool, queue });
     await app.ready();
+    const ghlClient = createGhlClient();
+    const facturxGenerator = createFacturxGenerator();
+    const storageClient = createStorageClient();
+    const pdpClient = createPdpClient();
 
     const payload = JSON.parse(
       readFileSync(join(process.cwd(), "fixtures", "ghl-invoice.json"), "utf8")
@@ -67,7 +80,11 @@ describe("webhook -> job -> audit", () => {
       {
         pool,
         queue,
-        logger
+        logger,
+        ghlClient,
+        facturxGenerator,
+        storageClient,
+        pdpClient
       },
       "test-worker"
     );

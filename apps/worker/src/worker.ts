@@ -1,14 +1,35 @@
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
+import { readFileSync } from "fs";
 import { JobQueue, QueueJob } from "@croco/queue";
-import { JobPayloads, JobType, IdempotencyStep, buildIdempotencyKey } from "@croco/core";
+import { JobPayloads, JobType, IdempotencyStep, buildIdempotencyKey, CanonicalInvoice } from "@croco/core";
 import { recordAuditEvent } from "@croco/audit";
 import { Logger } from "@croco/observability";
+import { createGhlClient, mapGhlToCanonical } from "@croco/ghl";
+import { createFacturxGenerator } from "@croco/facturx";
+import { createStorageClient } from "@croco/storage";
+import { createPdpClient } from "@croco/pdp";
+import {
+  getInvoice,
+  updateInvoiceRawPayload,
+  updateInvoiceCanonicalPayload,
+  updateInvoiceStatus,
+  insertInvoiceArtifacts,
+  getLatestArtifacts,
+  upsertPdpSubmission,
+  getLatestSubmission,
+  updatePdpSubmissionStatus
+} from "@croco/db";
+import { getTenantSecrets } from "@croco/config";
 
 export interface WorkerContext {
   pool: Pool;
   queue: JobQueue;
   logger: Logger;
+  ghlClient: ReturnType<typeof createGhlClient>;
+  facturxGenerator: ReturnType<typeof createFacturxGenerator>;
+  storageClient: ReturnType<typeof createStorageClient>;
+  pdpClient: ReturnType<typeof createPdpClient>;
 }
 
 type JobHandler<K extends JobType> = (
@@ -24,24 +45,72 @@ function correlationIdFrom(job: QueueJob): string {
   return job.correlationId ?? randomUUID();
 }
 
-async function updateInvoiceStatus(pool: Pool, invoiceId: string, status: string): Promise<void> {
-  await pool.query("UPDATE invoices SET status = $1, updated_at = now() WHERE id = $2", [
-    status,
-    invoiceId
-  ]);
+async function storeArtifacts(
+  ctx: WorkerContext,
+  invoiceId: string,
+  tenantId: string,
+  artifacts: { pdfPath: string; xmlPath: string; pdfSha256?: string; xmlSha256?: string }
+): Promise<{ pdfKey: string; xmlKey: string }> {
+  const pdfBuffer = readFileSync(artifacts.pdfPath);
+  const xmlBuffer = readFileSync(artifacts.xmlPath);
+
+  const pdfKey = `tenants/${tenantId}/invoices/${invoiceId}/facturx.pdf`;
+  const xmlKey = `tenants/${tenantId}/invoices/${invoiceId}/facturx.xml`;
+
+  await ctx.storageClient.putObject(pdfKey, pdfBuffer, "application/pdf");
+  await ctx.storageClient.putObject(xmlKey, xmlBuffer, "application/xml");
+
+  await insertInvoiceArtifacts(ctx.pool, {
+    invoiceId,
+    pdfKey,
+    xmlKey,
+    pdfSha256: artifacts.pdfSha256,
+    xmlSha256: artifacts.xmlSha256
+  });
+
+  return { pdfKey, xmlKey };
+}
+
+function mapPdpStatusToInvoice(status: string): string {
+  const normalized = status.toUpperCase();
+  if (normalized === "ACCEPTED") return "ACCEPTED";
+  if (normalized === "REJECTED") return "REJECTED";
+  if (normalized === "PAID") return "PAID";
+  return "SYNCED";
 }
 
 export function createHandlers(ctx: WorkerContext): Handlers {
   return {
     [JobType.FETCH_INVOICE]: async (job) => {
       const correlationId = correlationIdFrom(job);
+      const invoice = await getInvoice(ctx.pool, job.payload.invoiceId);
+      if (!invoice) {
+        throw new Error("Invoice not found");
+      }
+
+      const secrets = await getTenantSecrets(ctx.pool, job.payload.tenantId);
+      let fetchedPayload: Record<string, unknown> | null = null;
+      try {
+        const fetched = await ctx.ghlClient.fetchInvoice(
+          job.payload.tenantId,
+          job.payload.ghlInvoiceId,
+          secrets.ghlApiKey
+        );
+        if (Object.keys(fetched).length > 0) {
+          fetchedPayload = fetched as Record<string, unknown>;
+          await updateInvoiceRawPayload(ctx.pool, job.payload.invoiceId, fetchedPayload);
+        }
+      } catch (error) {
+        ctx.logger.warn({ error }, "ghl.fetch_failed");
+      }
+
       await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, "FETCHED");
       await recordAuditEvent(ctx.pool, {
         tenantId: job.payload.tenantId,
         correlationId,
         actor: "worker",
         eventType: "fetch_invoice.completed",
-        payload: { ghlInvoiceId: job.payload.ghlInvoiceId },
+        payload: { ghlInvoiceId: job.payload.ghlInvoiceId, fetched: Boolean(fetchedPayload) },
         invoiceId: job.payload.invoiceId,
         jobId: job.id
       });
@@ -65,13 +134,20 @@ export function createHandlers(ctx: WorkerContext): Handlers {
     },
     [JobType.MAP_CANONICAL]: async (job) => {
       const correlationId = correlationIdFrom(job);
+      const invoice = await getInvoice(ctx.pool, job.payload.invoiceId);
+      if (!invoice?.raw_payload) {
+        throw new Error("Invoice raw payload missing");
+      }
+
+      const canonical = mapGhlToCanonical(job.payload.tenantId, invoice.raw_payload);
+      await updateInvoiceCanonicalPayload(ctx.pool, job.payload.invoiceId, canonical as unknown as Record<string, unknown>);
       await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, "MAPPED");
       await recordAuditEvent(ctx.pool, {
         tenantId: job.payload.tenantId,
         correlationId,
         actor: "worker",
         eventType: "map_canonical.completed",
-        payload: {},
+        payload: { invoiceNumber: canonical.invoiceNumber },
         invoiceId: job.payload.invoiceId,
         jobId: job.id
       });
@@ -95,13 +171,21 @@ export function createHandlers(ctx: WorkerContext): Handlers {
     },
     [JobType.GENERATE_FACTURX]: async (job) => {
       const correlationId = correlationIdFrom(job);
+      const invoice = await getInvoice(ctx.pool, job.payload.invoiceId);
+      if (!invoice?.canonical_payload) {
+        throw new Error("Canonical invoice missing");
+      }
+
+      const canonical = invoice.canonical_payload as CanonicalInvoice;
+      const artifacts = await ctx.facturxGenerator.generate(canonical);
+      await storeArtifacts(ctx, job.payload.invoiceId, job.payload.tenantId, artifacts);
       await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, "GENERATED");
       await recordAuditEvent(ctx.pool, {
         tenantId: job.payload.tenantId,
         correlationId,
         actor: "worker",
         eventType: "generate_facturx.completed",
-        payload: {},
+        payload: { pdfKey: `tenants/${job.payload.tenantId}/invoices/${job.payload.invoiceId}/facturx.pdf` },
         invoiceId: job.payload.invoiceId,
         jobId: job.id
       });
@@ -125,13 +209,39 @@ export function createHandlers(ctx: WorkerContext): Handlers {
     },
     [JobType.SUBMIT_PDP]: async (job) => {
       const correlationId = correlationIdFrom(job);
+      const invoice = await getInvoice(ctx.pool, job.payload.invoiceId);
+      if (!invoice?.canonical_payload) {
+        throw new Error("Canonical invoice missing");
+      }
+
+      const artifacts = await getLatestArtifacts(ctx.pool, job.payload.invoiceId);
+      if (!artifacts?.pdf_key || !artifacts?.xml_key) {
+        throw new Error("Invoice artifacts missing");
+      }
+
+      const canonical = invoice.canonical_payload as CanonicalInvoice;
+      const pdpSubmission = await ctx.pdpClient.submit(job.payload.tenantId, canonical, {
+        pdfPath: artifacts.pdf_key,
+        xmlPath: artifacts.xml_key,
+        pdfSha256: artifacts.pdf_sha256 ?? undefined,
+        xmlSha256: artifacts.xml_sha256 ?? undefined
+      });
+
+      await upsertPdpSubmission(ctx.pool, {
+        tenantId: job.payload.tenantId,
+        invoiceId: job.payload.invoiceId,
+        provider: pdpSubmission.provider,
+        submissionId: pdpSubmission.submissionId,
+        status: pdpSubmission.status
+      });
+
       await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, "SUBMITTED");
       await recordAuditEvent(ctx.pool, {
         tenantId: job.payload.tenantId,
         correlationId,
         actor: "worker",
         eventType: "submit_pdp.completed",
-        payload: {},
+        payload: { submissionId: pdpSubmission.submissionId, provider: pdpSubmission.provider },
         invoiceId: job.payload.invoiceId,
         jobId: job.id
       });
@@ -155,13 +265,36 @@ export function createHandlers(ctx: WorkerContext): Handlers {
     },
     [JobType.SYNC_STATUS]: async (job) => {
       const correlationId = correlationIdFrom(job);
-      await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, "SYNCED");
+      const invoice = await getInvoice(ctx.pool, job.payload.invoiceId);
+      if (!invoice) {
+        throw new Error("Invoice not found");
+      }
+      const submission = await getLatestSubmission(ctx.pool, job.payload.invoiceId);
+      if (!submission) {
+        throw new Error("PDP submission missing");
+      }
+
+      const secrets = await getTenantSecrets(ctx.pool, job.payload.tenantId);
+      const status = await ctx.pdpClient.getStatus(job.payload.tenantId, submission.submission_id);
+      await updatePdpSubmissionStatus(ctx.pool, { submissionId: submission.submission_id, status: status.status });
+      const mappedStatus = mapPdpStatusToInvoice(status.status);
+      await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, mappedStatus);
+
+      if (mappedStatus !== "ERROR") {
+        await ctx.ghlClient.pushStatus(
+          job.payload.tenantId,
+          invoice.ghl_invoice_id,
+          mappedStatus,
+          secrets.ghlApiKey
+        );
+      }
+
       await recordAuditEvent(ctx.pool, {
         tenantId: job.payload.tenantId,
         correlationId,
         actor: "worker",
         eventType: "sync_status.completed",
-        payload: {},
+        payload: { status: status.status, mappedStatus },
         invoiceId: job.payload.invoiceId,
         jobId: job.id
       });

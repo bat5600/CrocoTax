@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { Tenant } from "@croco/core";
 import { loadEnvFile } from "./envfile";
+import { decryptSecret, encryptSecret, getTenantSecrets } from "./secrets";
 
 export interface EnvConfig {
   databaseUrl: string;
@@ -8,6 +9,12 @@ export interface EnvConfig {
   objectStoreAccessKey?: string;
   objectStoreSecretKey?: string;
   objectStoreBucket?: string;
+  storageMode: string;
+  storageLocalPath?: string;
+  facturxMode: string;
+  pdpProvider: string;
+  pdpApiBase?: string;
+  ghlApiBase?: string;
   workerPollIntervalMs: number;
 }
 
@@ -23,6 +30,12 @@ export function getEnv(): EnvConfig {
     objectStoreAccessKey: process.env.OBJECT_STORE_ACCESS_KEY,
     objectStoreSecretKey: process.env.OBJECT_STORE_SECRET_KEY,
     objectStoreBucket: process.env.OBJECT_STORE_BUCKET,
+    storageMode: process.env.STORAGE_MODE ?? "filesystem",
+    storageLocalPath: process.env.STORAGE_LOCAL_PATH,
+    facturxMode: process.env.FACTURX_MODE ?? "stub",
+    pdpProvider: process.env.PDP_PROVIDER ?? "mock",
+    pdpApiBase: process.env.PDP_API_BASE,
+    ghlApiBase: process.env.GHL_API_BASE,
     workerPollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS ?? 1000)
   };
 }
@@ -47,3 +60,4 @@ export async function resolveTenantFromRequest(
 }
 
 export { loadEnvFile };
+export { encryptSecret, decryptSecret, getTenantSecrets };

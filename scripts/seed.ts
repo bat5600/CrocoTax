@@ -1,5 +1,5 @@
 import { getPool, closePool, waitForDatabase } from "@croco/db";
-import { loadEnvFile } from "@croco/config";
+import { loadEnvFile, encryptSecret } from "@croco/config";
 
 export async function seedDemoTenant(): Promise<string> {
   loadEnvFile();
@@ -11,9 +11,12 @@ export async function seedDemoTenant(): Promise<string> {
   );
   const tenantId = tenantResult.rows[0].id as string;
 
+  const ghlSecret = encryptSecret(process.env.GHL_API_KEY ?? "demo-ghl-key");
+  const pdpSecret = encryptSecret(process.env.PDP_API_KEY ?? "demo-pdp-key");
+
   await pool.query(
     "INSERT INTO tenant_secrets (tenant_id, ghl_api_key_enc, pdp_api_key_enc, enc_version, enc_nonce) VALUES ($1, $2, $3, $4, $5)",
-    [tenantId, "enc_placeholder", "enc_placeholder", 1, "nonce_placeholder"]
+    [tenantId, ghlSecret.ciphertext, pdpSecret.ciphertext, ghlSecret.version, ghlSecret.nonce]
   );
 
   return tenantId;

@@ -1,20 +1,21 @@
 import { CanonicalInvoice } from "@croco/core";
-
-export interface FacturxArtifacts {
-  pdfPath: string;
-  xmlPath: string;
-  pdfSha256?: string;
-  xmlSha256?: string;
-}
+import { FacturxArtifacts, generateFacturxStub } from "./generator";
 
 export interface FacturxGenerator {
   generate(input: CanonicalInvoice): Promise<FacturxArtifacts>;
 }
 
 export function createFacturxGenerator(): FacturxGenerator {
+  const mode = process.env.FACTURX_MODE ?? "stub";
   return {
-    async generate(_input: CanonicalInvoice): Promise<FacturxArtifacts> {
-      throw new Error("Factur-X generation not implemented");
+    async generate(input: CanonicalInvoice): Promise<FacturxArtifacts> {
+      if (mode === "stub") {
+        return generateFacturxStub(input);
+      }
+      throw new Error(`Factur-X generation mode not supported: ${mode}`);
     }
   };
 }
+
+export type { FacturxArtifacts } from "./generator";
+export * from "./cii";
