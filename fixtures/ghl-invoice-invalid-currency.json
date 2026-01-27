@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_bad_currency_001",
+  "invoiceNumber": "BAD-CUR-2026-0006",
+  "issueDate": "2026-01-25",
+  "currency": "EURO",
+  "totalAmount": 20,
+  "customer": {
+    "name": "Bad Currency Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Bad Currency Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Line",
+      "quantity": 1,
+      "unitPrice": 20,
+      "taxRate": 0
+    }
+  ]
+}

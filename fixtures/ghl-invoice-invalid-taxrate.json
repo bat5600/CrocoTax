@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_bad_tax_001",
+  "invoiceNumber": "BADTAX-2026-0008",
+  "issueDate": "2026-01-26",
+  "currency": "EUR",
+  "totalAmount": 110,
+  "customer": {
+    "name": "Bad Tax Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Bad Tax Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Line",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 2.5
+    }
+  ]
+}

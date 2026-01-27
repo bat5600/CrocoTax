@@ -1,0 +1,24 @@
+{
+  "invoiceId": "inv_discount_001",
+  "invoiceNumber": "DISC-2026-0010",
+  "issueDate": "2026-01-26",
+  "currency": "EUR",
+  "totalAmount": 90,
+  "customer": {
+    "name": "Discount Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Discount Seller",
+    "country": "FR"
+  },
+  "discountTotal": 10,
+  "lines": [
+    {
+      "description": "Line A",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 0
+    }
+  ]
+}

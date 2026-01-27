@@ -1,5 +1,5 @@
 import { CanonicalInvoice } from "@croco/core";
-import { FacturxArtifacts, generateFacturxStub } from "./generator";
+import { FacturxArtifacts, generateFacturxCli, generateFacturxStub } from "./generator";
 
 export interface FacturxGenerator {
   generate(input: CanonicalInvoice): Promise<FacturxArtifacts>;
@@ -11,6 +11,9 @@ export function createFacturxGenerator(): FacturxGenerator {
     async generate(input: CanonicalInvoice): Promise<FacturxArtifacts> {
       if (mode === "stub") {
         return generateFacturxStub(input);
+      }
+      if (mode === "cli") {
+        return generateFacturxCli(input);
       }
       throw new Error(`Factur-X generation mode not supported: ${mode}`);
     }

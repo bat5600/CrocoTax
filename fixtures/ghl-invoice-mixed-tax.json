@@ -1,0 +1,29 @@
+{
+  "invoiceId": "inv_mixed_tax_001",
+  "invoiceNumber": "MIXTAX-2026-0009",
+  "issueDate": "2026-01-26",
+  "currency": "EUR",
+  "totalAmount": 0,
+  "customer": {
+    "name": "Mixed Tax Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Mixed Tax Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Line A",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 0.2
+    },
+    {
+      "description": "Line B",
+      "quantity": 2,
+      "unitPrice": 50,
+      "taxRate": 0.055
+    }
+  ]
+}

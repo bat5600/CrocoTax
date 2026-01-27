@@ -125,3 +125,28 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Improve M1 validation and ensure canonical dates are compliant.
 - **Impact/Risk**: Canonical issueDate now normalized to date-only; downstream consumers should expect YYYY-MM-DD.
 - **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.
+
+- **What changed**: Added total-mismatch fixture/test and adjusted GHL mapper to reconcile totals using line sums (including tax). Updated unit expectations.
+- **Why**: Improve M1 validation when reported totals disagree with line items.
+- **Impact/Risk**: Canonical `totalAmount` may now be derived from line totals if mismatch > 0.01.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.
+
+- **What changed**: Added tolerance fixture/test for total rounding and adjusted total reconciliation to tolerate floating-point drift.
+- **Why**: Ensure M1 mapping does not override reported totals for minor rounding differences.
+- **Impact/Risk**: Totals within ~0.01 now preserve reported amount; reduced false corrections.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.
+
+- **What changed**: Added extensive M1 fixtures (invalid country/currency, missing parties, tax range, mixed tax, discount, credit note) and expanded mapper tests. Normalized currency/country, clamped tax rates, applied discounts in total reconciliation.
+- **Why**: Cover validation edge cases and improve canonical mapping robustness for M1.
+- **Impact/Risk**: Canonical totals can now consider discounts; tax rates outside [0,1] become 0; invalid country/currency default to FR/EUR.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts`.
+
+- **What changed**: Added canonical schema refinements (currency/country format, tax rate max, total consistency with discounts) and new canonical schema unit tests; mapper now emits optional `discountTotal`.
+- **Why**: Finalize M1 validation rules and ensure canonical totals are consistent with line items.
+- **Impact/Risk**: Canonical validation is stricter; malformed canonical payloads now fail fast.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts tests/unit/canonical-schema.test.ts`.
+
+- **What changed**: Added CLI-based Factur-X generator using Ghostscript PDF/A-3 conversion and qpdf XML attachment; added `PDFA_ICC_PROFILE` env and README guidance.
+- **Why**: Implement M2 real Factur-X generation pipeline beyond the stub.
+- **Impact/Risk**: Requires external binaries (`gs`, `qpdf`) and an sRGB ICC profile; generation will fail fast if missing.
+- **Verification**: Not run (missing system dependencies in this environment).

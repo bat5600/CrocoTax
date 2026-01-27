@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_tolerance_001",
+  "invoiceNumber": "TOL-2026-0004",
+  "issueDate": "2026-01-24",
+  "currency": "EUR",
+  "totalAmount": 120.01,
+  "customer": {
+    "name": "Tolerance Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Tolerance Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Line A",
+      "quantity": 1,
+      "unitPrice": 100,
+      "taxRate": 0.2
+    }
+  ]
+}

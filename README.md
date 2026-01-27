@@ -40,6 +40,7 @@ npm test
 - Webhook secret defaults to `demo-secret` for the seeded tenant.
 - Storage defaults to filesystem (`./storage`).
 - Factur-X generation is stubbed by default (`FACTURX_MODE=stub`).
+- For PDF/A-3 Factur-X, set `FACTURX_MODE=cli` and install `ghostscript` + `qpdf`, then set `PDFA_ICC_PROFILE` to an sRGB `.icc` file.
 
 ## Directory Overview
 - `apps/api`: webhook ingest, idempotency, enqueue

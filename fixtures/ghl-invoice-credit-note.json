@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_credit_001",
+  "invoiceNumber": "CREDIT-2026-0011",
+  "issueDate": "2026-01-26",
+  "currency": "EUR",
+  "totalAmount": -50,
+  "customer": {
+    "name": "Credit Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Credit Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Refund",
+      "quantity": 1,
+      "unitPrice": -50,
+      "taxRate": 0
+    }
+  ]
+}

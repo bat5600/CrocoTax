@@ -1,0 +1,29 @@
+{
+  "invoiceId": "inv_mismatch_001",
+  "invoiceNumber": "MISMATCH-2026-0003",
+  "issueDate": "2026-01-23",
+  "currency": "EUR",
+  "totalAmount": 999.99,
+  "customer": {
+    "name": "Mismatch Buyer",
+    "country": "FR"
+  },
+  "seller": {
+    "name": "Mismatch Seller",
+    "country": "FR"
+  },
+  "lines": [
+    {
+      "description": "Line A",
+      "quantity": 2,
+      "unitPrice": 30,
+      "taxRate": 0
+    },
+    {
+      "description": "Line B",
+      "quantity": 1,
+      "unitPrice": 40.5,
+      "taxRate": 0
+    }
+  ]
+}

@@ -1,5 +1,6 @@
+import { execFileSync } from "child_process";
 import { createHash } from "crypto";
-import { mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { CanonicalInvoice } from "@croco/core";
@@ -50,6 +51,71 @@ export interface FacturxArtifacts {
   xmlSha256?: string;
 }
 
+function ensureTool(binary: string): void {
+  try {
+    execFileSync(binary, ["--version"], { stdio: "ignore" });
+  } catch (error) {
+    throw new Error(
+      `Missing required binary "${binary}". Install it and ensure it is on PATH.`
+    );
+  }
+}
+
+function resolveIccProfile(): string {
+  const candidates = [
+    process.env.PDFA_ICC_PROFILE,
+    "/usr/share/color/icc/ghostscript/srgb.icc",
+    "/usr/share/color/icc/ghostscript/sRGB.icc",
+    "/usr/share/ghostscript/iccprofiles/srgb.icc",
+    "/usr/share/color/icc/sRGB.icc"
+  ];
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    "Missing ICC profile for PDF/A-3 conversion. Set PDFA_ICC_PROFILE to a valid sRGB .icc file."
+  );
+}
+
+function runGhostscriptPdfA(inputPdf: string, outputPdf: string, iccPath: string): void {
+  const args = [
+    "-dPDFA=3",
+    "-dBATCH",
+    "-dNOPAUSE",
+    "-dNOOUTERSAVE",
+    "-sDEVICE=pdfwrite",
+    "-sColorConversionStrategy=RGB",
+    "-sProcessColorModel=DeviceRGB",
+    "-dUseCIEColor",
+    "-dPDFACompatibilityPolicy=1",
+    `-sOutputICCProfile=${iccPath}`,
+    `-sOutputFile=${outputPdf}`,
+    inputPdf
+  ];
+  execFileSync("gs", args, { stdio: "inherit" });
+}
+
+function attachXmlWithQpdf(pdfPath: string, xmlPath: string, outputPdf: string): void {
+  const baseArgs = [
+    "--add-attachment=" + xmlPath,
+    "--attachment-name=facturx.xml",
+    "--attachment-description=Factur-X XML",
+    "--attachment-mimetype=application/xml",
+    "--attachment-relationship=Data",
+    pdfPath,
+    outputPdf
+  ];
+
+  try {
+    execFileSync("qpdf", baseArgs, { stdio: "inherit" });
+  } catch (error) {
+    const fallbackArgs = ["--add-attachment=" + xmlPath, pdfPath, outputPdf];
+    execFileSync("qpdf", fallbackArgs, { stdio: "inherit" });
+  }
+}
+
 export async function generateFacturxStub(
   invoice: CanonicalInvoice
 ): Promise<FacturxArtifacts> {
@@ -72,6 +138,43 @@ export async function generateFacturxStub(
     pdfPath,
     xmlPath,
     pdfSha256: sha256(pdfBuffer),
+    xmlSha256: sha256(xmlBuffer)
+  };
+}
+
+export async function generateFacturxCli(
+  invoice: CanonicalInvoice
+): Promise<FacturxArtifacts> {
+  ensureTool("gs");
+  ensureTool("qpdf");
+  const iccProfile = resolveIccProfile();
+
+  const tmpBase = join(tmpdir(), "facturx");
+  mkdirSync(tmpBase, { recursive: true });
+  const dir = join(tmpBase, `${invoice.tenantId}-${invoice.invoiceNumber}-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+
+  const xmlContent = buildCiiXml(invoice);
+  const xmlBuffer = Buffer.from(xmlContent, "utf8");
+  const xmlPath = join(dir, "facturx.xml");
+  writeFileSync(xmlPath, xmlBuffer);
+
+  const draftPdfPath = join(dir, "draft.pdf");
+  const pdfaPath = join(dir, "pdfa.pdf");
+  const finalPdfPath = join(dir, "facturx.pdf");
+
+  const pdfBuffer = buildMinimalPdf(`Invoice ${invoice.invoiceNumber}`);
+  writeFileSync(draftPdfPath, pdfBuffer);
+
+  runGhostscriptPdfA(draftPdfPath, pdfaPath, iccProfile);
+  attachXmlWithQpdf(pdfaPath, xmlPath, finalPdfPath);
+
+  const finalPdfBuffer = readFileSync(finalPdfPath);
+
+  return {
+    pdfPath: finalPdfPath,
+    xmlPath,
+    pdfSha256: sha256(finalPdfBuffer),
     xmlSha256: sha256(xmlBuffer)
   };
 }

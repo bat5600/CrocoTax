@@ -1,0 +1,15 @@
+{
+  "invoiceId": "inv_no_party_001",
+  "invoiceNumber": "NOPARTY-2026-0007",
+  "issueDate": "2026-01-26",
+  "currency": "EUR",
+  "totalAmount": 50,
+  "lines": [
+    {
+      "description": "Line",
+      "quantity": 1,
+      "unitPrice": 50,
+      "taxRate": 0
+    }
+  ]
+}

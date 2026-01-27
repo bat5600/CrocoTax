@@ -1,0 +1,23 @@
+{
+  "invoiceId": "inv_bad_country_001",
+  "invoiceNumber": "BAD-CTRY-2026-0005",
+  "issueDate": "2026-01-25",
+  "currency": "EUR",
+  "totalAmount": 10,
+  "customer": {
+    "name": "Bad Country Buyer",
+    "country": "FRA"
+  },
+  "seller": {
+    "name": "Bad Country Seller",
+    "country": "france"
+  },
+  "lines": [
+    {
+      "description": "Line",
+      "quantity": 1,
+      "unitPrice": 10,
+      "taxRate": 0
+    }
+  ]
+}

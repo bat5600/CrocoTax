@@ -28,7 +28,7 @@ describe("GHL mapper", () => {
       invoiceNumber: "ALT-2026-0042",
       issueDate: "2026-01-20",
       currency: "USD",
-      totalAmount: 250.5,
+      totalAmount: 270.5,
       buyer: {
         name: "Alt Buyer",
         country: "US"
@@ -97,5 +97,79 @@ describe("GHL mapper", () => {
         }
       ]
     });
+  });
+
+  it("falls back to line totals when reported total mismatches", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-total-mismatch.json");
+
+    const canonical = mapGhlToCanonical("tenant_mismatch", ghl as never);
+
+    expect(canonical.totalAmount).toBe(100.5);
+  });
+
+  it("keeps reported totals when within tolerance", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-total-tolerance.json");
+
+    const canonical = mapGhlToCanonical("tenant_tolerance", ghl as never);
+
+    expect(canonical.totalAmount).toBe(120.01);
+  });
+
+  it("normalizes invalid country and currency values", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-invalid-country.json");
+
+    const canonical = mapGhlToCanonical("tenant_bad_country", ghl as never);
+
+    expect(canonical.buyer.country).toBe("FR");
+    expect(canonical.seller.country).toBe("FR");
+  });
+
+  it("normalizes invalid currency codes", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-invalid-currency.json");
+
+    const canonical = mapGhlToCanonical("tenant_bad_currency", ghl as never);
+
+    expect(canonical.currency).toBe("EUR");
+  });
+
+  it("falls back to placeholder parties when missing", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-missing-parties.json");
+
+    const canonical = mapGhlToCanonical("tenant_missing_parties", ghl as never);
+
+    expect(canonical.buyer.name).toBe("Buyer");
+    expect(canonical.seller.name).toBe("Seller");
+  });
+
+  it("clamps out-of-range tax rates to zero", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-invalid-taxrate.json");
+
+    const canonical = mapGhlToCanonical("tenant_bad_tax", ghl as never);
+
+    expect(canonical.lines[0]?.taxRate).toBe(0);
+  });
+
+  it("reconciles totals with mixed tax rates", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-mixed-tax.json");
+
+    const canonical = mapGhlToCanonical("tenant_mixed_tax", ghl as never);
+
+    expect(canonical.totalAmount).toBe(225.5);
+  });
+
+  it("applies discount totals when present", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-discount.json");
+
+    const canonical = mapGhlToCanonical("tenant_discount", ghl as never);
+
+    expect(canonical.totalAmount).toBe(90);
+  });
+
+  it("sanitizes credit note negatives into zero totals", () => {
+    const ghl = loadFixture<Record<string, unknown>>("ghl-invoice-credit-note.json");
+
+    const canonical = mapGhlToCanonical("tenant_credit", ghl as never);
+
+    expect(canonical.totalAmount).toBe(0);
   });
 });

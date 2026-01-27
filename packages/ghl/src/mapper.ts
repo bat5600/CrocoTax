@@ -55,7 +55,7 @@ function normalizeCountry(value: unknown): string {
 
 function normalizeCurrency(value: unknown): string {
   const raw = asString(value, "EUR").toUpperCase();
-  if (raw.length === 3) {
+  if (/^[A-Z]{3}$/.test(raw)) {
     return raw;
   }
   return "EUR";
@@ -80,7 +80,7 @@ function extractLines(input: Record<string, unknown>): CanonicalInvoice["lines"]
       ),
       quantity: quantity > 0 ? quantity : 1,
       unitPrice: unitPrice >= 0 ? unitPrice : 0,
-      taxRate: taxRate >= 0 ? taxRate : 0
+      taxRate: taxRate >= 0 && taxRate <= 1 ? taxRate : 0
     };
   });
 
@@ -94,6 +94,13 @@ function extractLines(input: Record<string, unknown>): CanonicalInvoice["lines"]
           taxRate: 0
         }
       ];
+}
+
+function sumLines(lines: CanonicalInvoice["lines"]): number {
+  return lines.reduce(
+    (sum, line) => sum + line.unitPrice * line.quantity * (1 + line.taxRate),
+    0
+  );
 }
 
 export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): CanonicalInvoice {
@@ -110,10 +117,17 @@ export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): Canonica
   const seller = record.seller as Record<string, unknown> | undefined;
 
   const lines = extractLines(record);
-  const totalAmount = asNumber(
-    pick(record.totalAmount, record.amount, record.total),
-    lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
+  const lineTotal = sumLines(lines);
+  const discountTotal = asNumber(
+    pick(record.discountTotal, record.discountAmount, record.discount),
+    0
   );
+  const discountedLineTotal = Math.max(0, lineTotal - Math.max(0, discountTotal));
+  const reportedTotal = pick(record.totalAmount, record.amount, record.total);
+  const parsedTotal = asNumber(reportedTotal, discountedLineTotal);
+  const tolerance = 0.01;
+  const diff = Math.abs(parsedTotal - discountedLineTotal);
+  const totalAmount = diff > tolerance + 1e-9 ? discountedLineTotal : parsedTotal;
 
   const canonical: CanonicalInvoice = {
     tenantId,
@@ -121,6 +135,7 @@ export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): Canonica
     issueDate,
     currency,
     totalAmount,
+    discountTotal: discountTotal > 0 ? discountTotal : undefined,
     buyer: {
       name: asString(pick(buyer?.name, buyer?.fullName, buyer?.company), "Buyer"),
       country: normalizeCountry(pick(buyer?.country, buyer?.countryCode))
