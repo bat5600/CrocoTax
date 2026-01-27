@@ -12,6 +12,7 @@
     "facturx:smoke": "FACTURX_MODE=cli npx tsx scripts/facturx-smoke.ts",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "pdp:smoke": "npx tsx scripts/pdp-flow-smoke.ts",
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
     "test": "vitest run",

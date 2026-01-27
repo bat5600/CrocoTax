@@ -57,6 +57,16 @@ async function run(): Promise<void> {
     }
   }
 
+  const { rows } = await pool.query(
+    "SELECT status FROM invoices WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
+    [tenantId]
+  );
+  if (!rows.length) {
+    throw new Error("No invoice created during PDP smoke run");
+  }
+  // eslint-disable-next-line no-console
+  console.log(`Latest invoice status: ${rows[0].status}`);
+
   await app.close();
 }
 

@@ -280,3 +280,8 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Verify M3 flow works locally after PDP integration changes.
 - **Impact/Risk**: None (verification only).
 - **Verification**: `npm run migrate`, `npm run seed`, `TENANT_ID=... npx tsx scripts/pdp-flow-smoke.ts`.
+
+- **What changed**: Added `pdp:smoke` npm script, extended PDP smoke script with a status assertion, and documented usage in README.
+- **Why**: Make M3 validation repeatable and visible.
+- **Impact/Risk**: None (docs/scripts only).
+- **Verification**: Not run (script/doc update).
