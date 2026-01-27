@@ -3,7 +3,8 @@ export const JobType = {
   MAP_CANONICAL: "MAP_CANONICAL",
   GENERATE_FACTURX: "GENERATE_FACTURX",
   SUBMIT_PDP: "SUBMIT_PDP",
-  SYNC_STATUS: "SYNC_STATUS"
+  SYNC_STATUS: "SYNC_STATUS",
+  RECONCILE_PDP: "RECONCILE_PDP"
 } as const;
 
 export type JobType = (typeof JobType)[keyof typeof JobType];
@@ -34,5 +35,10 @@ export interface JobPayloads {
     tenantId: string;
     invoiceId: string;
     correlationId: string;
+  };
+  RECONCILE_PDP: {
+    correlationId: string;
+    tenantId?: string;
+    limit?: number;
   };
 }

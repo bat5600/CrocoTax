@@ -175,3 +175,108 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Make PDFBox attachment support configurable and stable across environments.
 - **Impact/Risk**: None at runtime unless `PDFBOX_JAR` is set; local tooling only.
 - **Verification**: Not run (docs/config update).
+
+- **What changed**: Added migration `0002_pdp_submissions_fields.sql` to extend PDP submissions with raw status, last error, and last checked timestamp.
+- **Why**: Support M3 status reconciliation, auditing, and error tracking.
+- **Impact/Risk**: Requires running migrations; adds nullable columns only.
+- **Verification**: Not run (migration added).
+
+- **What changed**: Extended PDP DB helpers to store raw status/error metadata and list pending submissions for reconciliation.
+- **Why**: Enable M3 status polling and auditability.
+- **Impact/Risk**: Requires new migration to be applied; no behavior change until used.
+- **Verification**: Not run (code change only).
+
+- **What changed**: Added `RECONCILE_PDP` job type/payload to core jobs.
+- **Why**: Support M3 background reconciliation of pending PDP submissions.
+- **Impact/Risk**: Requires worker/queue updates to handle new job type.
+- **Verification**: Not run (types update).
+
+- **What changed**: Extended PDP client types to include artifact payloads and request options (api key, idempotency, correlation).
+- **Why**: Support M3 per-tenant auth and richer submission payloads.
+- **Impact/Risk**: Requires updates in PDP implementations and worker.
+- **Verification**: Not run (types update).
+
+- **What changed**: Enhanced HTTP PDP client to support per-request auth/idempotency headers and base64/keys artifact modes.
+- **Why**: Enable real PDP submission semantics for M3.
+- **Impact/Risk**: PDP payload format changed; provider endpoints must accept the new structure.
+- **Verification**: Not run (code change only).
+
+- **What changed**: Updated mock PDP client to align with new artifact payload types.
+- **Why**: Keep tests/dev flows working after PDP API type changes.
+- **Impact/Risk**: None (mock only).
+- **Verification**: Not run (code change only).
+
+- **What changed**: Added PDP artifact mode configuration via `PDP_ARTIFACT_MODE` in PDP client factory.
+- **Why**: Allow providers to choose between base64 payloads or storage key references.
+- **Impact/Risk**: None unless PDP_ARTIFACT_MODE is set.
+- **Verification**: Not run (config update).
+
+- **What changed**: Added PDP reconcile and artifact mode settings to `.env.example`.
+- **Why**: Document M3 configuration knobs for PDP submission and polling.
+- **Impact/Risk**: Docs/config only.
+- **Verification**: Not run (config update).
+
+- **What changed**: Added PDP reconcile and artifact mode settings to runtime config (`getEnv`).
+- **Why**: Allow worker to schedule reconciliation and control payload format.
+- **Impact/Risk**: None unless settings are used; defaults are safe.
+- **Verification**: Not run (config update).
+
+- **What changed**: Updated worker PDP flow to send base64 artifacts, use tenant PDP secrets, store status raw data, re-enqueue pending status checks, and add `RECONCILE_PDP` handler.
+- **Why**: Implement M3 submission + status polling + reconciliation with retries.
+- **Impact/Risk**: PDP payload format changed; additional queue traffic for pending statuses.
+- **Verification**: Not run (worker logic update).
+
+- **What changed**: Scheduled periodic PDP reconciliation jobs in the worker using new env settings.
+- **Why**: Ensure pending submissions are polled without manual triggers (M3).
+- **Impact/Risk**: Adds background queue load at the configured interval.
+- **Verification**: Not run (worker scheduling update).
+
+- **What changed**: Documented PDP integration and reconciliation settings in README.
+- **Why**: Make M3 configuration discoverable for local/dev use.
+- **Impact/Risk**: Docs only.
+- **Verification**: Not run (docs update).
+
+- **What changed**: Updated `.env` with PDP artifact/reconcile settings.
+- **Why**: Enable M3 defaults in the local environment.
+- **Impact/Risk**: Local config only.
+- **Verification**: Not run (env update).
+
+- **What changed**: Worker now respects `PDP_ARTIFACT_MODE` to avoid loading artifacts when sending keys only.
+- **Why**: Reduce storage reads and align with PDP payload mode.
+- **Impact/Risk**: None; only affects submission payload construction.
+- **Verification**: Not run (logic change).
+
+- **What changed**: Added PDP submit/status error audit events and status error persistence in worker.
+- **Why**: Improve M3 observability and failure handling.
+- **Impact/Risk**: More audit logs; status errors stored in DB.
+- **Verification**: Not run (logic change).
+
+- **What changed**: PDP HTTP client now validates required base64 content when `PDP_ARTIFACT_MODE=base64`.
+- **Why**: Prevent invalid submissions to PDP provider.
+- **Impact/Risk**: Errors earlier if artifacts are missing.
+- **Verification**: Not run (logic change).
+
+- **What changed**: Updated mock PDP client signatures to accept request options.
+- **Why**: Keep mock compatible with new PDP interface.
+- **Impact/Risk**: None.
+- **Verification**: Not run (mock update).
+
+- **What changed**: Ran full test suite after M3 updates.
+- **Why**: Verify worker + PDP changes did not break existing flows.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Added `AGENTS_M3_PLAN.md` outlining PDP integration implementation steps.
+- **Why**: Capture M3 scope and intent for auditability.
+- **Impact/Risk**: Docs only.
+- **Verification**: Not run (plan doc).
+
+- **What changed**: Added `scripts/pdp-flow-smoke.ts` to exercise webhook -> worker -> PDP flow locally.
+- **Why**: Provide a reproducible M3 end-to-end smoke test.
+- **Impact/Risk**: No runtime impact; local utility script only.
+- **Verification**: Not run (script added).
+
+- **What changed**: Ran migrations, seeded a demo tenant, and executed the PDP end-to-end smoke script (webhook -> worker -> PDP) with mock provider.
+- **Why**: Verify M3 flow works locally after PDP integration changes.
+- **Impact/Risk**: None (verification only).
+- **Verification**: `npm run migrate`, `npm run seed`, `TENANT_ID=... npx tsx scripts/pdp-flow-smoke.ts`.

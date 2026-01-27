@@ -8,6 +8,7 @@ import { createGhlClient } from "@croco/ghl";
 import { createFacturxGenerator } from "@croco/facturx";
 import { createStorageClient } from "@croco/storage";
 import { createPdpClient } from "@croco/pdp";
+import { JobType } from "@croco/core";
 
 loadEnvFile();
 
@@ -35,3 +36,20 @@ startWorker(
   workerId,
   env.workerPollIntervalMs
 );
+
+const reconcileIntervalMs = env.pdpReconcileIntervalMs;
+setInterval(async () => {
+  const correlationId = randomUUID();
+  const bucket = Math.floor(Date.now() / reconcileIntervalMs);
+  await queue.enqueue(
+    JobType.RECONCILE_PDP,
+    {
+      correlationId,
+      limit: env.pdpReconcileBatch
+    },
+    {
+      idempotencyKey: `RECONCILE:${bucket}`,
+      correlationId
+    }
+  );
+}, reconcileIntervalMs);

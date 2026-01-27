@@ -18,7 +18,8 @@ import {
   getLatestArtifacts,
   upsertPdpSubmission,
   getLatestSubmission,
-  updatePdpSubmissionStatus
+  updatePdpSubmissionStatus,
+  listPendingSubmissions
 } from "@croco/db";
 import { getTenantSecrets } from "@croco/config";
 
@@ -76,7 +77,20 @@ function mapPdpStatusToInvoice(status: string): string {
   if (normalized === "ACCEPTED") return "ACCEPTED";
   if (normalized === "REJECTED") return "REJECTED";
   if (normalized === "PAID") return "PAID";
+  if (normalized === "SUBMITTED" || normalized === "PROCESSING" || normalized === "PENDING") {
+    return "SYNCED";
+  }
   return "SYNCED";
+}
+
+function isPendingStatus(status: string): boolean {
+  const normalized = status.toUpperCase();
+  return ["SUBMITTED", "PROCESSING", "PENDING", "SYNCED"].includes(normalized);
+}
+
+function computeNextRun(attempts: number, maxMs = 10 * 60 * 1000): Date {
+  const delay = Math.min(Math.pow(2, Math.max(attempts, 1)) * 1000, maxMs);
+  return new Date(Date.now() + delay);
 }
 
 export function createHandlers(ctx: WorkerContext): Handlers {
@@ -219,13 +233,53 @@ export function createHandlers(ctx: WorkerContext): Handlers {
         throw new Error("Invoice artifacts missing");
       }
 
+      const artifactMode = process.env.PDP_ARTIFACT_MODE ?? "base64";
+      const pdfBuffer =
+        artifactMode === "base64" ? await ctx.storageClient.getObject(artifacts.pdf_key) : null;
+      const xmlBuffer =
+        artifactMode === "base64" ? await ctx.storageClient.getObject(artifacts.xml_key) : null;
       const canonical = invoice.canonical_payload as CanonicalInvoice;
-      const pdpSubmission = await ctx.pdpClient.submit(job.payload.tenantId, canonical, {
-        pdfPath: artifacts.pdf_key,
-        xmlPath: artifacts.xml_key,
-        pdfSha256: artifacts.pdf_sha256 ?? undefined,
-        xmlSha256: artifacts.xml_sha256 ?? undefined
-      });
+      const secrets = await getTenantSecrets(ctx.pool, job.payload.tenantId);
+      let pdpSubmission;
+      try {
+        pdpSubmission = await ctx.pdpClient.submit(
+          job.payload.tenantId,
+          canonical,
+          {
+            pdf: {
+              key: artifacts.pdf_key,
+              sha256: artifacts.pdf_sha256 ?? undefined,
+              base64: pdfBuffer ? pdfBuffer.toString("base64") : undefined
+            },
+            xml: {
+              key: artifacts.xml_key,
+              sha256: artifacts.xml_sha256 ?? undefined,
+              base64: xmlBuffer ? xmlBuffer.toString("base64") : undefined
+            }
+          },
+          {
+            apiKey: secrets.pdpApiKey,
+            correlationId,
+            idempotencyKey: buildIdempotencyKey(
+              IdempotencyStep.SUBMIT,
+              job.payload.tenantId,
+              job.payload.invoiceId
+            )
+          }
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "pdp_submit_failed";
+        await recordAuditEvent(ctx.pool, {
+          tenantId: job.payload.tenantId,
+          correlationId,
+          actor: "worker",
+          eventType: "submit_pdp.failed",
+          payload: { error: message },
+          invoiceId: job.payload.invoiceId,
+          jobId: job.id
+        });
+        throw error;
+      }
 
       await upsertPdpSubmission(ctx.pool, {
         tenantId: job.payload.tenantId,
@@ -275,8 +329,40 @@ export function createHandlers(ctx: WorkerContext): Handlers {
       }
 
       const secrets = await getTenantSecrets(ctx.pool, job.payload.tenantId);
-      const status = await ctx.pdpClient.getStatus(job.payload.tenantId, submission.submission_id);
-      await updatePdpSubmissionStatus(ctx.pool, { submissionId: submission.submission_id, status: status.status });
+      let status;
+      try {
+        status = await ctx.pdpClient.getStatus(job.payload.tenantId, submission.submission_id, {
+          apiKey: secrets.pdpApiKey,
+          correlationId,
+          idempotencyKey: buildIdempotencyKey(
+            IdempotencyStep.SYNC,
+            job.payload.tenantId,
+            submission.submission_id
+          )
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "pdp_status_failed";
+        await updatePdpSubmissionStatus(ctx.pool, {
+          submissionId: submission.submission_id,
+          status: "ERROR",
+          lastError: message
+        });
+        await recordAuditEvent(ctx.pool, {
+          tenantId: job.payload.tenantId,
+          correlationId,
+          actor: "worker",
+          eventType: "sync_status.failed",
+          payload: { error: message },
+          invoiceId: job.payload.invoiceId,
+          jobId: job.id
+        });
+        throw error;
+      }
+      await updatePdpSubmissionStatus(ctx.pool, {
+        submissionId: submission.submission_id,
+        status: status.status,
+        statusRaw: status.raw ?? null
+      });
       const mappedStatus = mapPdpStatusToInvoice(status.status);
       await updateInvoiceStatus(ctx.pool, job.payload.invoiceId, mappedStatus);
 
@@ -296,6 +382,69 @@ export function createHandlers(ctx: WorkerContext): Handlers {
         eventType: "sync_status.completed",
         payload: { status: status.status, mappedStatus },
         invoiceId: job.payload.invoiceId,
+        jobId: job.id
+      });
+
+      if (isPendingStatus(status.status)) {
+        await ctx.queue.enqueue(
+          JobType.SYNC_STATUS,
+          {
+            tenantId: job.payload.tenantId,
+            invoiceId: job.payload.invoiceId,
+            correlationId
+          },
+          {
+            tenantId: job.payload.tenantId,
+            correlationId,
+            runAt: computeNextRun(job.attempts),
+            idempotencyKey: buildIdempotencyKey(
+              IdempotencyStep.SYNC,
+              job.payload.tenantId,
+              submission.submission_id,
+              `retry-${job.attempts}`
+            )
+          }
+        );
+      }
+    },
+    [JobType.RECONCILE_PDP]: async (job) => {
+      const correlationId = correlationIdFrom(job);
+      const limit = job.payload.limit ?? 25;
+      const olderThanMinutes = Number(process.env.PDP_RECONCILE_OLDER_MINUTES ?? 15);
+      const pending = await listPendingSubmissions(ctx.pool, {
+        tenantId: job.payload.tenantId,
+        olderThanMinutes,
+        limit
+      });
+
+      for (const submission of pending) {
+        await ctx.queue.enqueue(
+          JobType.SYNC_STATUS,
+          {
+            tenantId: submission.tenant_id,
+            invoiceId: submission.invoice_id,
+            correlationId
+          },
+          {
+            tenantId: submission.tenant_id,
+            correlationId,
+            runAt: new Date(),
+            idempotencyKey: buildIdempotencyKey(
+              IdempotencyStep.SYNC,
+              submission.tenant_id,
+              submission.submission_id,
+              "reconcile"
+            )
+          }
+        );
+      }
+
+      await recordAuditEvent(ctx.pool, {
+        tenantId: job.payload.tenantId ?? "system",
+        correlationId,
+        actor: "worker",
+        eventType: "pdp.reconcile.completed",
+        payload: { count: pending.length },
         jobId: job.id
       });
     }

@@ -16,7 +16,8 @@ export function createPdpClient(): PdpClient {
   return createHttpPdpClient({
     baseUrl,
     apiKey: process.env.PDP_API_KEY,
-    provider
+    provider,
+    artifactMode: (process.env.PDP_ARTIFACT_MODE as "base64" | "keys" | undefined) ?? "base64"
   });
 }
 

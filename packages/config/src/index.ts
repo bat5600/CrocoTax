@@ -14,6 +14,10 @@ export interface EnvConfig {
   facturxMode: string;
   pdpProvider: string;
   pdpApiBase?: string;
+  pdpArtifactMode: "base64" | "keys";
+  pdpReconcileIntervalMs: number;
+  pdpReconcileBatch: number;
+  pdpReconcileOlderMinutes: number;
   ghlApiBase?: string;
   workerPollIntervalMs: number;
 }
@@ -35,6 +39,10 @@ export function getEnv(): EnvConfig {
     facturxMode: process.env.FACTURX_MODE ?? "stub",
     pdpProvider: process.env.PDP_PROVIDER ?? "mock",
     pdpApiBase: process.env.PDP_API_BASE,
+    pdpArtifactMode: (process.env.PDP_ARTIFACT_MODE as "base64" | "keys") ?? "base64",
+    pdpReconcileIntervalMs: Number(process.env.PDP_RECONCILE_INTERVAL_MS ?? 600000),
+    pdpReconcileBatch: Number(process.env.PDP_RECONCILE_BATCH ?? 25),
+    pdpReconcileOlderMinutes: Number(process.env.PDP_RECONCILE_OLDER_MINUTES ?? 15),
     ghlApiBase: process.env.GHL_API_BASE,
     workerPollIntervalMs: Number(process.env.WORKER_POLL_INTERVAL_MS ?? 1000)
   };
