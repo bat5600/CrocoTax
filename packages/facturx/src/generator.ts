@@ -2,7 +2,7 @@ import { execFileSync } from "child_process";
 import { createHash } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { delimiter, join } from "path";
 import { CanonicalInvoice } from "@croco/core";
 import { buildCiiXml } from "./cii";
 
@@ -61,6 +61,51 @@ function ensureTool(binary: string): void {
   }
 }
 
+function resolvePdfBoxJar(): string | undefined {
+  const candidates = [
+    process.env.PDFBOX_JAR,
+    join(process.cwd(), "tools", "pdfbox-app-3.0.2.jar")
+  ];
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function attachXmlWithPdfBox(
+  inputPdf: string,
+  xmlPath: string,
+  outputPdf: string,
+  iccPath: string,
+  pdfBoxJar: string
+): void {
+  ensureTool("java");
+  ensureTool("javac");
+  const javaSource = join(process.cwd(), "scripts", "FacturxAttach.java");
+  const buildDir = join(tmpdir(), "facturx-pdfbox");
+  mkdirSync(buildDir, { recursive: true });
+  execFileSync("javac", ["-cp", pdfBoxJar, "-d", buildDir, javaSource], {
+    stdio: "inherit"
+  });
+  const classPath = `${buildDir}${delimiter}${pdfBoxJar}`;
+  execFileSync(
+    "java",
+    [
+      "-Djava.awt.headless=true",
+      "-cp",
+      classPath,
+      "FacturxAttach",
+      inputPdf,
+      xmlPath,
+      outputPdf,
+      iccPath
+    ],
+    { stdio: "inherit" }
+  );
+}
+
 function resolveIccProfile(): string {
   const candidates = [
     process.env.PDFA_ICC_PROFILE,
@@ -80,6 +125,9 @@ function resolveIccProfile(): string {
 }
 
 function runGhostscriptPdfA(inputPdf: string, outputPdf: string, iccPath: string): void {
+  const pdfaDefPath = join(tmpdir(), `facturx-pdfa-def-${Date.now()}.ps`);
+  const pdfaDef = `%!\n/ICCProfile (${iccPath}) def\n/OutputIntent <<\n  /Type /OutputIntent\n  /S /GTS_PDFA3\n  /OutputConditionIdentifier (sRGB IEC61966-2.1)\n  /Info (sRGB IEC61966-2.1)\n  /RegistryName (http://www.color.org)\n  /DestOutputProfile ICCProfile\n>> def\n<< /OutputIntents [ OutputIntent ] >> setdistillerparams\n`;
+  writeFileSync(pdfaDefPath, pdfaDef);
   const args = [
     "-dPDFA=3",
     "-dBATCH",
@@ -88,10 +136,10 @@ function runGhostscriptPdfA(inputPdf: string, outputPdf: string, iccPath: string
     "-sDEVICE=pdfwrite",
     "-sColorConversionStrategy=RGB",
     "-sProcessColorModel=DeviceRGB",
-    "-dUseCIEColor",
     "-dPDFACompatibilityPolicy=1",
     `-sOutputICCProfile=${iccPath}`,
     `-sOutputFile=${outputPdf}`,
+    pdfaDefPath,
     inputPdf
   ];
   execFileSync("gs", args, { stdio: "inherit" });
@@ -99,11 +147,13 @@ function runGhostscriptPdfA(inputPdf: string, outputPdf: string, iccPath: string
 
 function attachXmlWithQpdf(pdfPath: string, xmlPath: string, outputPdf: string): void {
   const baseArgs = [
-    "--add-attachment=" + xmlPath,
-    "--attachment-name=facturx.xml",
-    "--attachment-description=Factur-X XML",
-    "--attachment-mimetype=application/xml",
-    "--attachment-relationship=Data",
+    "--add-attachment",
+    xmlPath,
+    "--description=Factur-X XML",
+    "--filename=facturx.xml",
+    "--key=facturx.xml",
+    "--mimetype=application/xml",
+    "--",
     pdfPath,
     outputPdf
   ];
@@ -111,9 +161,70 @@ function attachXmlWithQpdf(pdfPath: string, xmlPath: string, outputPdf: string):
   try {
     execFileSync("qpdf", baseArgs, { stdio: "inherit" });
   } catch (error) {
-    const fallbackArgs = ["--add-attachment=" + xmlPath, pdfPath, outputPdf];
+    const fallbackArgs = ["--add-attachment", xmlPath, "--", pdfPath, outputPdf];
     execFileSync("qpdf", fallbackArgs, { stdio: "inherit" });
   }
+}
+
+function addAssociatedFileRelationship(pdfPath: string, outputPdf: string): void {
+  const patchedPath = pdfPath.replace(/\.pdf$/i, ".patched.pdf");
+  const pdf = readFileSync(pdfPath, "latin1");
+  let fileSpecId: string | undefined;
+
+  let updatedPdf = pdf;
+  const objRegex = /(\d+)\s+0\s+obj/g;
+  let match: RegExpExecArray | null;
+  while ((match = objRegex.exec(pdf)) !== null) {
+    const objId = match[1];
+    const start = match.index;
+    const end = pdf.indexOf("endobj", objRegex.lastIndex);
+    if (end === -1) {
+      break;
+    }
+    const objText = pdf.slice(start, end + "endobj".length);
+    if (/\/Type\s*\/Filespec/.test(objText)) {
+      fileSpecId = objId;
+      if (!/\/AFRelationship\s*\//.test(objText)) {
+        const updated = objText.replace(
+          />>\s*endobj/,
+          `\n/AFRelationship /Data\n>>\nendobj`
+        );
+        updatedPdf = updatedPdf.replace(objText, updated);
+      }
+      break;
+    }
+    objRegex.lastIndex = end + "endobj".length;
+  }
+
+  if (!fileSpecId) {
+    throw new Error("Unable to locate Filespec object for embedded XML.");
+  }
+
+  objRegex.lastIndex = 0;
+  while ((match = objRegex.exec(updatedPdf)) !== null) {
+    const start = match.index;
+    const end = updatedPdf.indexOf("endobj", objRegex.lastIndex);
+    if (end === -1) {
+      break;
+    }
+    const objText = updatedPdf.slice(start, end + "endobj".length);
+    if (/\/Type\s*\/Catalog/.test(objText)) {
+      if (!/\/AF\s*\[/.test(objText)) {
+        const updated = objText.replace(
+          />>\s*endobj/,
+          `\n/AF [${fileSpecId} 0 R]\n>>\nendobj`
+        );
+        updatedPdf = updatedPdf.replace(objText, updated);
+      }
+      break;
+    }
+    objRegex.lastIndex = end + "endobj".length;
+  }
+
+  writeFileSync(patchedPath, updatedPdf, "latin1");
+  execFileSync("qpdf", ["--warning-exit-0", patchedPath, outputPdf], {
+    stdio: "inherit"
+  });
 }
 
 export async function generateFacturxStub(
@@ -148,6 +259,7 @@ export async function generateFacturxCli(
   ensureTool("gs");
   ensureTool("qpdf");
   const iccProfile = resolveIccProfile();
+  const pdfBoxJar = resolvePdfBoxJar();
 
   const tmpBase = join(tmpdir(), "facturx");
   mkdirSync(tmpBase, { recursive: true });
@@ -167,7 +279,12 @@ export async function generateFacturxCli(
   writeFileSync(draftPdfPath, pdfBuffer);
 
   runGhostscriptPdfA(draftPdfPath, pdfaPath, iccProfile);
-  attachXmlWithQpdf(pdfaPath, xmlPath, finalPdfPath);
+  if (pdfBoxJar) {
+    attachXmlWithPdfBox(pdfaPath, xmlPath, finalPdfPath, iccProfile, pdfBoxJar);
+  } else {
+    attachXmlWithQpdf(pdfaPath, xmlPath, finalPdfPath);
+    addAssociatedFileRelationship(finalPdfPath, finalPdfPath);
+  }
 
   const finalPdfBuffer = readFileSync(finalPdfPath);
 

@@ -150,3 +150,28 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Implement M2 real Factur-X generation pipeline beyond the stub.
 - **Impact/Risk**: Requires external binaries (`gs`, `qpdf`) and an sRGB ICC profile; generation will fail fast if missing.
 - **Verification**: Not run (missing system dependencies in this environment).
+
+- **What changed**: Added `scripts/facturx-smoke.ts` and fixed qpdf attachment flag usage in CLI Factur-X generator.
+- **Why**: Enable M2 local verification and ensure XML attachment works with qpdf 11.x.
+- **Impact/Risk**: None beyond local tooling; CLI generator now produces attachable Factur-X artifacts.
+- **Verification**: `FACTURX_MODE=cli PDFA_ICC_PROFILE=/usr/share/color/icc/ghostscript/srgb.icc npx tsx scripts/facturx-smoke.ts`.
+
+- **What changed**: Updated `.env` with Factur-X CLI settings and local storage defaults.
+- **Why**: Enable M2 CLI Factur-X generation with the installed ICC profile.
+- **Impact/Risk**: Local config only; production envs must set their own values.
+- **Verification**: Not run (env update).
+
+- **What changed**: Added `facturx:smoke` npm script and optional veraPDF validation hook in the smoke script; documented in README.
+- **Why**: Make M2 verification repeatable and optionally validate PDF/A compliance.
+- **Impact/Risk**: No runtime impact; smoke script can fail if veraPDF is enabled but missing.
+- **Verification**: Not run (script/doc update).
+
+- **What changed**: Added PDFBox-based XML attachment with AFRelationship and OutputIntent to pass PDF/A-3B validation; added helper Java class and PDFBox jar fetch logic.
+- **Why**: Make Factur-X generation verifiable with veraPDF and compliant with associated file requirements.
+- **Impact/Risk**: Requires Java/JDK and PDFBox jar (or falls back to qpdf-only path); CLI generation now validates under veraPDF when configured.
+- **Verification**: `VERAPDF_BIN=/home/baptiste/projects/CrocoTax/tmp/verapdf/verapdf VERAPDF_VALIDATE=1 npm run facturx:smoke`.
+
+- **What changed**: Added `PDFBOX_JAR` to `.env.example`, documented it in README, and moved pdfbox jar to `tools/` for consistent discovery.
+- **Why**: Make PDFBox attachment support configurable and stable across environments.
+- **Impact/Risk**: None at runtime unless `PDFBOX_JAR` is set; local tooling only.
+- **Verification**: Not run (docs/config update).

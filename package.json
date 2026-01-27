@@ -9,6 +9,7 @@
     "dev:api": "tsx watch apps/api/src/index.ts",
     "dev:worker": "tsx watch apps/worker/src/index.ts",
     "dev": "concurrently -n api,worker -c green,blue \"npm run dev:api\" \"npm run dev:worker\"",
+    "facturx:smoke": "FACTURX_MODE=cli npx tsx scripts/facturx-smoke.ts",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "lint": "eslint . --ext .ts",
