@@ -39,6 +39,8 @@ export async function upsertPdpSubmission(
 export async function updatePdpSubmissionStatus(
   pool: Pool,
   params: {
+    tenantId: string;
+    provider: string;
     submissionId: string;
     status: string;
     statusRaw?: Record<string, unknown> | null;
@@ -46,18 +48,26 @@ export async function updatePdpSubmissionStatus(
   }
 ): Promise<void> {
   await pool.query(
-    "UPDATE pdp_submissions SET status = $1, status_raw = $2, last_error = $3, last_checked_at = now(), updated_at = now() WHERE submission_id = $4",
-    [params.status, params.statusRaw ?? null, params.lastError ?? null, params.submissionId]
+    "UPDATE pdp_submissions SET status = $1, status_raw = $2, last_error = $3, last_checked_at = now(), updated_at = now() WHERE submission_id = $4 AND tenant_id = $5 AND provider = $6",
+    [
+      params.status,
+      params.statusRaw ?? null,
+      params.lastError ?? null,
+      params.submissionId,
+      params.tenantId,
+      params.provider
+    ]
   );
 }
 
 export async function getLatestSubmission(
   pool: Pool,
+  tenantId: string,
   invoiceId: string
 ): Promise<PdpSubmissionRecord | null> {
   const result = await pool.query<PdpSubmissionRecord>(
-    "SELECT id, tenant_id, invoice_id, provider, submission_id, status, status_raw, last_error, last_checked_at FROM pdp_submissions WHERE invoice_id = $1 ORDER BY updated_at DESC LIMIT 1",
-    [invoiceId]
+    "SELECT id, tenant_id, invoice_id, provider, submission_id, status, status_raw, last_error, last_checked_at FROM pdp_submissions WHERE invoice_id = $1 AND tenant_id = $2 ORDER BY updated_at DESC LIMIT 1",
+    [invoiceId, tenantId]
   );
   return result.rowCount ? result.rows[0] : null;
 }

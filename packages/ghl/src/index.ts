@@ -4,16 +4,35 @@ import { createHmac, timingSafeEqual } from "crypto";
 export const GhlInvoiceSchema = z.record(z.unknown());
 export type GhlInvoice = z.infer<typeof GhlInvoiceSchema>;
 
+export interface GhlRequestOptions {
+  apiKey?: string;
+  correlationId?: string;
+}
+
 export interface GhlClient {
-  fetchInvoice(tenantId: string, invoiceId: string, apiKey?: string): Promise<GhlInvoice>;
-  pushStatus(tenantId: string, invoiceId: string, status: string, apiKey?: string): Promise<void>;
+  fetchInvoice(
+    tenantId: string,
+    invoiceId: string,
+    options?: GhlRequestOptions
+  ): Promise<GhlInvoice>;
+  pushStatus(
+    tenantId: string,
+    invoiceId: string,
+    status: string,
+    options?: GhlRequestOptions
+  ): Promise<void>;
 }
 
 export function createGhlClient(): GhlClient {
   const baseUrl = process.env.GHL_API_BASE;
 
   return {
-    async fetchInvoice(_tenantId: string, invoiceId: string, apiKey?: string): Promise<GhlInvoice> {
+    async fetchInvoice(
+      _tenantId: string,
+      invoiceId: string,
+      options?: GhlRequestOptions
+    ): Promise<GhlInvoice> {
+      const apiKey = options?.apiKey;
       if (!baseUrl || !apiKey) {
         return {};
       }
@@ -21,7 +40,8 @@ export function createGhlClient(): GhlClient {
       const response = await fetch(`${baseUrl.replace(/\/$/, "")}/invoices/${invoiceId}`,
         {
           headers: {
-            Authorization: `Bearer ${apiKey}`
+            Authorization: `Bearer ${apiKey}`,
+            ...(options?.correlationId ? { "X-Correlation-Id": options.correlationId } : {})
           }
         }
       );
@@ -30,7 +50,13 @@ export function createGhlClient(): GhlClient {
       }
       return (await response.json()) as GhlInvoice;
     },
-    async pushStatus(_tenantId: string, invoiceId: string, status: string, apiKey?: string): Promise<void> {
+    async pushStatus(
+      _tenantId: string,
+      invoiceId: string,
+      status: string,
+      options?: GhlRequestOptions
+    ): Promise<void> {
+      const apiKey = options?.apiKey;
       if (!baseUrl || !apiKey) {
         return;
       }
@@ -38,7 +64,8 @@ export function createGhlClient(): GhlClient {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(options?.correlationId ? { "X-Correlation-Id": options.correlationId } : {})
         },
         body: JSON.stringify({ status })
       });

@@ -285,3 +285,58 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Make M3 validation repeatable and visible.
 - **Impact/Risk**: None (docs/scripts only).
 - **Verification**: Not run (script/doc update).
+
+- **What changed**: Enforced tenant scoping in invoice/pdp DB accessors and updated worker calls to pass tenant IDs.
+- **Why**: Strengthen M4 tenancy isolation guarantees.
+- **Impact/Risk**: Queries now require tenant id; any missing tenant context will fail fast.
+- **Verification**: Not run (logic update).
+
+- **What changed**: Ran full test suite after tenant isolation updates.
+- **Why**: Validate M4 hardening changes.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Added basic metrics counters and `/metrics` endpoint; documented ops notes in `docs/ops.md` and README.
+- **Why**: M4 hardening for observability and operations.
+- **Impact/Risk**: Low; metrics are in-memory and reset on restart.
+- **Verification**: Not run (docs/metrics update).
+
+- **What changed**: Ran test suite after M4 observability updates.
+- **Why**: Validate metrics and tenant isolation changes.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Scoped PDP status updates by tenant/provider; prevented reconcile audit FK failure; added error handling for reconcile scheduler.
+- **Why**: Fix multi-tenant safety and avoid failed reconcile jobs.
+- **Impact/Risk**: Low; audit event may be logged via logger when no tenant is available.
+- **Verification**: Not run (logic update).
+
+- **What changed**: Ran test suite after M4 safety fixes.
+- **Why**: Validate reconcile/audit and PDP update changes.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Added minimal unit test for PDP reconcile handler to ensure sync jobs are enqueued.
+- **Why**: Cover new M4 reconcile behavior.
+- **Impact/Risk**: None.
+- **Verification**: Not run (test added).
+
+- **What changed**: Ran PDP reconcile unit test.
+- **Why**: Verify reconcile job enqueues sync work.
+- **Impact/Risk**: None.
+- **Verification**: `npx vitest run tests/unit/pdp-reconcile.test.ts`.
+
+- **What changed**: Added metrics auth token and webhook rate limit configuration; propagated correlation IDs to GHL API calls.
+- **Why**: M4 security hardening and traceability.
+- **Impact/Risk**: `/metrics` can now require auth; webhook requests may be throttled if configured.
+- **Verification**: Not run (config/logic update).
+
+- **What changed**: Ran test suite after M4 security/traceability updates.
+- **Why**: Validate recent changes.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Added runbook and compliance checklist docs; added artifact cleanup script and npm command; documented retention settings.
+- **Why**: M5 production readiness and maintenance tooling.
+- **Impact/Risk**: Cleanup script deletes local artifacts when run; use DRY_RUN to preview.
+- **Verification**: Not run (docs/scripts update).

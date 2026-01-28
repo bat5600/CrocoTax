@@ -39,17 +39,21 @@ startWorker(
 
 const reconcileIntervalMs = env.pdpReconcileIntervalMs;
 setInterval(async () => {
-  const correlationId = randomUUID();
-  const bucket = Math.floor(Date.now() / reconcileIntervalMs);
-  await queue.enqueue(
-    JobType.RECONCILE_PDP,
-    {
-      correlationId,
-      limit: env.pdpReconcileBatch
-    },
-    {
-      idempotencyKey: `RECONCILE:${bucket}`,
-      correlationId
-    }
-  );
+  try {
+    const correlationId = randomUUID();
+    const bucket = Math.floor(Date.now() / reconcileIntervalMs);
+    await queue.enqueue(
+      JobType.RECONCILE_PDP,
+      {
+        correlationId,
+        limit: env.pdpReconcileBatch
+      },
+      {
+        idempotencyKey: `RECONCILE:${bucket}`,
+        correlationId
+      }
+    );
+  } catch (error) {
+    logger.error({ error }, "pdp.reconcile.enqueue_failed");
+  }
 }, reconcileIntervalMs);

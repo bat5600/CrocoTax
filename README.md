@@ -45,6 +45,11 @@ npm test
 - For PDFBox attachment support, set `PDFBOX_JAR` to the local `pdfbox-app-3.x.x.jar` path (used to set AFRelationship and OutputIntent).
 - PDP integration: set `PDP_PROVIDER`, `PDP_API_BASE`, `PDP_API_KEY`. Use `PDP_ARTIFACT_MODE=base64` to send artifact contents or `keys` to send storage keys only. Reconciliation runs on `PDP_RECONCILE_INTERVAL_MS`.
 - PDP smoke: set `TENANT_ID` (seed output) and run `npm run pdp:smoke` to exercise webhook -> worker -> PDP.
+- Ops notes: see `docs/ops.md`.
+- Runbook: see `docs/runbook.md`.
+- Compliance checklist: see `docs/compliance-checklist.md`.
+- Maintenance: set `ARTIFACT_RETENTION_DAYS` and run `npm run cleanup:artifacts` (add `DRY_RUN=1` to preview deletions).
+- Security: set `METRICS_TOKEN` to require `Authorization: Bearer <token>` on `/metrics`. Set `WEBHOOK_RATE_LIMIT` (requests/sec) to throttle webhooks.
 
 ## Directory Overview
 - `apps/api`: webhook ingest, idempotency, enqueue

@@ -11,3 +11,5 @@ export function createLogger() {
 export function withCorrelation(logger: Logger, correlationId: string) {
   return logger.child({ correlationId });
 }
+
+export * from "./metrics";
