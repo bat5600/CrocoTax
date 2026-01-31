@@ -1,5 +1,6 @@
 import { createHttpPdpClient } from "./http";
 import { createMockPdpClient } from "./mock";
+import { createSuperPdpClient } from "./superpdp";
 import type { PdpClient } from "./types";
 
 export function createPdpClient(): PdpClient {
@@ -11,6 +12,14 @@ export function createPdpClient(): PdpClient {
   const baseUrl = process.env.PDP_API_BASE;
   if (!baseUrl) {
     throw new Error("PDP_API_BASE is not set");
+  }
+
+  if (provider === "superpdp") {
+    return createSuperPdpClient({
+      baseUrl,
+      apiKey: process.env.PDP_API_KEY,
+      provider
+    });
   }
 
   return createHttpPdpClient({

@@ -14,9 +14,14 @@ const storageClient = createStorageClient();
 
 const app = buildServer({ logger, pool, queue, storageClient });
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 3001);
 
-app.listen({ port, host: "0.0.0.0" }).catch((error) => {
-  logger.error(error);
-  process.exit(1);
-});
+app
+  .listen({ port, host: "0.0.0.0" })
+  .then(() => {
+    logger.info({ port }, "api.started");
+  })
+  .catch((error) => {
+    logger.error(error);
+    process.exit(1);
+  });

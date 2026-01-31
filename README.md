@@ -36,7 +36,7 @@ npm test
 ```
 
 ## Useful Notes
-- Default API port is `3000` (see `PORT` in `.env`).
+- Default API port is `3001` (see `PORT` in `.env`).
 - Webhook secret defaults to `demo-secret` for the seeded tenant.
 - Storage defaults to filesystem (`./storage`).
 - Factur-X generation is stubbed by default (`FACTURX_MODE=stub`).

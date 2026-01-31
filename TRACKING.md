@@ -64,6 +64,7 @@ Non-functional requirements: multi-tenant, auditable, idempotent, secure, observ
 - 2026-01-26: Default storage mode is filesystem for local dev; MinIO/S3 is supported via config.
 - 2026-01-26: Secrets encryption uses AES-256-GCM with `TENANT_SECRET_KEY` (fallback to plaintext for dev).
 - 2026-01-26: Factur-X generation starts with a stub PDF + CII XML for MVP pipeline validation.
+- 2026-01-31: Selected SUPER PDP as the initial MVP PDP provider (sandbox first, production after validation).
 
 ## Progress Log (Add-only)
 Use one entry per meaningful change. Keep entries short, factual, and actionable.
@@ -376,3 +377,21 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Deliver P1 portal views for invoice monitoring and user entry points.
 - **Impact/Risk**: Frontend-only UI changes; no backend behavior changes.
 - **Verification**: Not run (UI-only change).
+
+### 2026-01-31
+- **What changed**: Documented the MVP PDP provider choice (SUPER PDP) and added an MVP checklist focused on onboarding + acceptance criteria (`docs/mvp.md`).
+- **Why**: Align MVP execution around a single PDP provider and make next steps clear to non-dev stakeholders.
+- **Impact/Risk**: Documentation only; no runtime behavior changes.
+- **Verification**: Not run (docs update).
+- **What changed**: Changed API default port from `3000` to `3001` (`apps/api/src/index.ts`) and updated `README.md` + `.env.example` (and local `.env`) to match; added `api.started` log including the port.
+- **Why**: Avoid `EADDRINUSE` when the portal (Next.js) or another dev server is already using `3000`.
+- **Impact/Risk**: API now listens on `3001` by default; set `PORT=3000` to revert if needed.
+- **Verification**: `node --import tsx -e "import('./apps/api/src/server').then(()=>console.log('server.module_loaded'))"`.
+- **What changed**: Added SUPER PDP provider integration (`packages/pdp/src/superpdp.ts`) using `POST /v1.beta/invoices` + `GET /v1.beta/invoice_events` for status; forced `PDP_ARTIFACT_MODE=base64` for SUPER PDP submissions in worker (`apps/worker/src/worker.ts`). Updated MVP doc with required env vars (`docs/mvp.md`) and added the SUPER PDP OpenAPI spec (`docs/superpdp.json`).
+- **Why**: Enable a real PDP sandbox path for the MVP (send Factur‑X PDF, then poll official status/event codes).
+- **Impact/Risk**: New PDP provider option `PDP_PROVIDER=superpdp`; submissions require base64 artifacts (file upload) and status mapping is heuristic for `fr:*` codes (raw events stored for audit).
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts tests/unit/canonical-schema.test.ts tests/unit/pdp-reconcile.test.ts` (integration tests require Docker).
+- **What changed**: Added unit tests for SUPER PDP client submit/status behavior (`tests/unit/superpdp-client.test.ts`).
+- **Why**: Keep the new provider integration verifiable without network access.
+- **Impact/Risk**: Test-only change; no runtime behavior impact.
+- **Verification**: `npx vitest run tests/unit/ghl-mapper.test.ts tests/unit/canonical-schema.test.ts tests/unit/pdp-reconcile.test.ts tests/unit/superpdp-client.test.ts`.

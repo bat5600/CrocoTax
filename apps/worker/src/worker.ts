@@ -249,7 +249,9 @@ export function createHandlers(ctx: WorkerContext): Handlers {
         throw new Error("Invoice artifacts missing");
       }
 
-      const artifactMode = process.env.PDP_ARTIFACT_MODE ?? "base64";
+      const provider = process.env.PDP_PROVIDER ?? "mock";
+      const artifactMode =
+        provider === "superpdp" ? "base64" : (process.env.PDP_ARTIFACT_MODE ?? "base64");
       const pdfBuffer =
         artifactMode === "base64" ? await ctx.storageClient.getObject(artifacts.pdf_key) : null;
       const xmlBuffer =
