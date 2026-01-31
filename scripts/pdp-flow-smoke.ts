@@ -21,12 +21,12 @@ async function run(): Promise<void> {
   const logger = createLogger();
   const pool = getPool();
   const queue = new DbQueue(pool, logger);
-  const app = buildServer({ logger, pool, queue });
+  const storageClient = createStorageClient();
+  const app = buildServer({ logger, pool, queue, storageClient });
   await app.ready();
 
   const ghlClient = createGhlClient();
   const facturxGenerator = createFacturxGenerator();
-  const storageClient = createStorageClient();
   const pdpClient = createPdpClient();
 
   const payload = JSON.parse(

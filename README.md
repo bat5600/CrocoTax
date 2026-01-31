@@ -50,6 +50,9 @@ npm test
 - Compliance checklist: see `docs/compliance-checklist.md`.
 - Maintenance: set `ARTIFACT_RETENTION_DAYS` and run `npm run cleanup:artifacts` (add `DRY_RUN=1` to preview deletions).
 - Security: set `METRICS_TOKEN` to require `Authorization: Bearer <token>` on `/metrics`. Set `WEBHOOK_RATE_LIMIT` (requests/sec) to throttle webhooks.
+- Tenant API: set `TENANT_API_TOKEN` (or `tenants.config.api_token`) to protect `/api/v1/*` endpoints (requires `x-tenant-id` + `Authorization: Bearer ...`).
+- Invoice artifacts: download the latest Factur-X via `/api/v1/invoices/:id/artifacts/pdf` and `/api/v1/invoices/:id/artifacts/xml` (tenant-scoped + token-protected).
+- Invoice list filters: `/api/v1/invoices?status=ACCEPTED&ghlInvoiceId=...` plus cursor pagination.
 
 ## Directory Overview
 - `apps/api`: webhook ingest, idempotency, enqueue

@@ -340,3 +340,39 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: M5 production readiness and maintenance tooling.
 - **Impact/Risk**: Cleanup script deletes local artifacts when run; use DRY_RUN to preview.
 - **Verification**: Not run (docs/scripts update).
+
+- **What changed**: Added tenant-scoped invoice status API (`/api/v1/invoices`, `/api/v1/invoices/:id`, `/api/v1/invoices/:id/audit`) with optional tenant API token; added DB queries for invoice listing/details and invoice audit reads; added integration test for the new endpoints.
+- **Why**: Provide the API foundation for an end-user space to track invoice delivery/status.
+- **Impact/Risk**: New read endpoints expose invoice metadata/status; enable `TENANT_API_TOKEN` (or `tenants.config.api_token`) to protect them.
+- **Verification**: `npm test`.
+
+- **What changed**: Added tenant-scoped artifact download endpoints (`/api/v1/invoices/:id/artifacts/pdf|xml`), extended API server deps to include storage client, and expanded integration tests to cover artifact downloads.
+- **Why**: Enable end users to retrieve Factur-X artifacts and verify delivery status.
+- **Impact/Risk**: New endpoints expose PDF/XML; keep `TENANT_API_TOKEN` enabled to prevent unauthorized access.
+- **Verification**: Not run yet (pending full test run).
+
+- **What changed**: Verified new artifact download endpoints with full test suite.
+- **Why**: Ensure API changes are stable and tenant isolation holds.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Added invoice list filters for `status` and `ghlInvoiceId` in DB query and API handler; expanded integration test coverage.
+- **Why**: Let users search/filter invoice statuses at scale.
+- **Impact/Risk**: Read endpoint supports more query params; ensure indexes if performance issues arise.
+- **Verification**: Not run yet (pending full test run).
+
+- **What changed**: Verified invoice list filtering changes with full test suite.
+- **Why**: Ensure new query params behave and don’t break tenant isolation.
+- **Impact/Risk**: None.
+- **Verification**: `npm test`.
+
+- **What changed**: Created initial portal UI shell (P0) in `apps/portal` with new layout, typography, and dashboard components; removed default Next.js page styles.
+- **Why**: Start modern SaaS portal UI iteration.
+- **Impact/Risk**: Frontend-only; no backend changes.
+- **Verification**: Not run (UI-only change).
+
+### 2026-01-29
+- **What changed**: Expanded portal UI with login, invoices list/detail, and placeholder pages for alerts/customers/settings; refined portal layout metadata and added comprehensive styling/animations in `apps/portal/src/app/globals.css`.
+- **Why**: Deliver P1 portal views for invoice monitoring and user entry points.
+- **Impact/Risk**: Frontend-only UI changes; no backend behavior changes.
+- **Verification**: Not run (UI-only change).

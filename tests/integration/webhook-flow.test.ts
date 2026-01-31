@@ -53,11 +53,11 @@ describe("webhook -> job -> audit", () => {
   it("enqueues a job and writes an audit event", async () => {
     const pool = getPool();
     const queue = new DbQueue(pool, logger);
-    const app = buildServer({ logger, pool, queue });
+    const storageClient = createStorageClient();
+    const app = buildServer({ logger, pool, queue, storageClient });
     await app.ready();
     const ghlClient = createGhlClient();
     const facturxGenerator = createFacturxGenerator();
-    const storageClient = createStorageClient();
     const pdpClient = createPdpClient();
 
     const payload = JSON.parse(

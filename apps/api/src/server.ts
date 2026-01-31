@@ -5,14 +5,16 @@ import { JobQueue } from "@croco/queue";
 import { JobType, IdempotencyStep, buildIdempotencyKey } from "@croco/core";
 import { verifyWebhook } from "@croco/ghl";
 import { resolveTenantFromRequest } from "@croco/config";
-import { insertIdempotencyKey } from "@croco/db";
+import { getInvoiceDetails, insertIdempotencyKey, listAuditEventsForInvoice, listInvoices } from "@croco/db";
 import { recordAuditEvent } from "@croco/audit";
 import { Logger, incCounter, registerCounter, renderMetrics } from "@croco/observability";
+import { StorageClient } from "@croco/storage";
 
 interface BuildServerDeps {
   logger: Logger;
   pool: Pool;
   queue: JobQueue;
+  storageClient: StorageClient;
 }
 
 interface WebhookBody {
@@ -28,6 +30,43 @@ interface RateLimiterState {
 }
 
 const REQUEST_LIMIT_WINDOW_MS = 1000;
+
+function parseCursor(cursor?: string): { createdAt?: string; id?: string } {
+  if (!cursor) {
+    return {};
+  }
+  const idx = cursor.indexOf("|");
+  if (idx <= 0) {
+    return {};
+  }
+  const createdAt = cursor.slice(0, idx);
+  const id = cursor.slice(idx + 1);
+  if (!createdAt || !id) {
+    return {};
+  }
+  return { createdAt, id };
+}
+
+async function requireTenant(
+  request: FastifyRequest,
+  deps: BuildServerDeps
+): Promise<import("@croco/core").Tenant> {
+  const tenant = await resolveTenantFromRequest(request.headers, deps.pool);
+  if (!tenant) {
+    throw Object.assign(new Error("tenant_not_found"), { statusCode: 401 });
+  }
+
+  const configuredToken =
+    (tenant.config?.api_token as string | undefined) ?? process.env.TENANT_API_TOKEN;
+  if (configuredToken) {
+    const auth = request.headers.authorization;
+    if (!auth || auth !== `Bearer ${configuredToken}`) {
+      throw Object.assign(new Error("unauthorized"), { statusCode: 401 });
+    }
+  }
+
+  return tenant;
+}
 
 export function buildServer(deps: BuildServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger });
@@ -60,6 +99,110 @@ export function buildServer(deps: BuildServerDeps): FastifyInstance {
     }
     reply.header("Content-Type", "text/plain; version=0.0.4");
     return renderMetrics();
+  });
+
+  app.get("/api/v1/invoices", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const query = request.query as Record<string, unknown>;
+      const limit = Number(query.limit ?? 50);
+      const cursor = typeof query.cursor === "string" ? query.cursor : undefined;
+      const status = typeof query.status === "string" ? query.status : undefined;
+      const ghlInvoiceId =
+        typeof query.ghlInvoiceId === "string" ? query.ghlInvoiceId : undefined;
+      const { createdAt, id } = parseCursor(cursor);
+
+      const rows = await listInvoices(deps.pool, {
+        tenantId: tenant.id,
+        limit: Number.isFinite(limit) ? limit : 50,
+        cursorCreatedAt: createdAt,
+        cursorId: id,
+        status,
+        ghlInvoiceId
+      });
+      const nextCursor =
+        rows.length > 0 ? `${rows[rows.length - 1].created_at}|${rows[rows.length - 1].id}` : null;
+
+      return reply.code(200).send({ ok: true, invoices: rows, nextCursor });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/v1/invoices/:invoiceId", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const invoiceId = (request.params as { invoiceId: string }).invoiceId;
+      const row = await getInvoiceDetails(deps.pool, { tenantId: tenant.id, invoiceId });
+      if (!row) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
+      return reply.code(200).send({ ok: true, invoice: row });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/v1/invoices/:invoiceId/artifacts/pdf", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const invoiceId = (request.params as { invoiceId: string }).invoiceId;
+      const row = await getInvoiceDetails(deps.pool, { tenantId: tenant.id, invoiceId });
+      if (!row || !row.latest_pdf_key) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
+      const pdf = await deps.storageClient.getObject(row.latest_pdf_key);
+      reply.header("Content-Type", "application/pdf");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename=\"${row.ghl_invoice_id || row.id}.pdf\"`
+      );
+      return reply.code(200).send(pdf);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/v1/invoices/:invoiceId/artifacts/xml", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const invoiceId = (request.params as { invoiceId: string }).invoiceId;
+      const row = await getInvoiceDetails(deps.pool, { tenantId: tenant.id, invoiceId });
+      if (!row || !row.latest_xml_key) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
+      const xml = await deps.storageClient.getObject(row.latest_xml_key);
+      reply.header("Content-Type", "application/xml");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename=\"${row.ghl_invoice_id || row.id}.xml\"`
+      );
+      return reply.code(200).send(xml);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/v1/invoices/:invoiceId/audit", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const invoiceId = (request.params as { invoiceId: string }).invoiceId;
+      const query = request.query as Record<string, unknown>;
+      const limit = Number(query.limit ?? 50);
+      const events = await listAuditEventsForInvoice(deps.pool, {
+        tenantId: tenant.id,
+        invoiceId,
+        limit: Number.isFinite(limit) ? limit : 50
+      });
+      return reply.code(200).send({ ok: true, events });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
   });
 
   app.post(
