@@ -492,9 +492,49 @@ export async function processOnce(ctx: WorkerContext, workerId: string): Promise
     return false;
   }
   const handlers = createHandlers(ctx);
-  const handler = handlers[job.type as JobType];
   try {
-    await handler(job as QueueJob<JobPayloads[JobType]>, ctx);
+    switch (job.type) {
+      case JobType.FETCH_INVOICE:
+        await handlers[JobType.FETCH_INVOICE](
+          job as QueueJob<JobPayloads[typeof JobType.FETCH_INVOICE]>,
+          ctx
+        );
+        break;
+      case JobType.MAP_CANONICAL:
+        await handlers[JobType.MAP_CANONICAL](
+          job as QueueJob<JobPayloads[typeof JobType.MAP_CANONICAL]>,
+          ctx
+        );
+        break;
+      case JobType.GENERATE_FACTURX:
+        await handlers[JobType.GENERATE_FACTURX](
+          job as QueueJob<JobPayloads[typeof JobType.GENERATE_FACTURX]>,
+          ctx
+        );
+        break;
+      case JobType.SUBMIT_PDP:
+        await handlers[JobType.SUBMIT_PDP](
+          job as QueueJob<JobPayloads[typeof JobType.SUBMIT_PDP]>,
+          ctx
+        );
+        break;
+      case JobType.SYNC_STATUS:
+        await handlers[JobType.SYNC_STATUS](
+          job as QueueJob<JobPayloads[typeof JobType.SYNC_STATUS]>,
+          ctx
+        );
+        break;
+      case JobType.RECONCILE_PDP:
+        await handlers[JobType.RECONCILE_PDP](
+          job as QueueJob<JobPayloads[typeof JobType.RECONCILE_PDP]>,
+          ctx
+        );
+        break;
+      default: {
+        const unreachable: never = job.type;
+        throw new Error(`Unknown job type: ${unreachable}`);
+      }
+    }
     await ctx.queue.complete(job.id);
     incCounter("worker_job_completed_total", { type: job.type });
   } catch (error) {

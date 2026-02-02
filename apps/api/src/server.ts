@@ -1,10 +1,10 @@
-import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
 import { JobQueue } from "@croco/queue";
 import { JobType, IdempotencyStep, buildIdempotencyKey } from "@croco/core";
 import { verifyWebhook } from "@croco/ghl";
-import { resolveTenantFromRequest } from "@croco/config";
+import { encryptSecret, resolveTenantFromRequest } from "@croco/config";
 import { getInvoiceDetails, insertIdempotencyKey, listAuditEventsForInvoice, listInvoices } from "@croco/db";
 import { recordAuditEvent } from "@croco/audit";
 import { Logger, incCounter, registerCounter, renderMetrics } from "@croco/observability";
@@ -68,7 +68,7 @@ async function requireTenant(
   return tenant;
 }
 
-export function buildServer(deps: BuildServerDeps): FastifyInstance {
+export function buildServer(deps: BuildServerDeps) {
   const app = Fastify({ logger: deps.logger });
   registerCounter("webhook_received_total", "Total webhook requests received");
   registerCounter("webhook_invalid_signature_total", "Total webhook signature failures");
@@ -99,6 +99,125 @@ export function buildServer(deps: BuildServerDeps): FastifyInstance {
     }
     reply.header("Content-Type", "text/plain; version=0.0.4");
     return renderMetrics();
+  });
+
+  app.get("/api/v1/settings", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const result = await deps.pool.query(
+        "SELECT ghl_api_key_enc, pdp_api_key_enc FROM tenant_secrets WHERE tenant_id = $1",
+        [tenant.id]
+      );
+      const row = (result.rows[0] ?? {}) as {
+        ghl_api_key_enc?: string | null;
+        pdp_api_key_enc?: string | null;
+      };
+
+      return reply.code(200).send({
+        ok: true,
+        tenant: { id: tenant.id, name: tenant.name },
+        integrations: {
+          ghl: { configured: Boolean(row.ghl_api_key_enc) },
+          pdp: {
+            provider: process.env.PDP_PROVIDER ?? "mock",
+            configured: Boolean(row.pdp_api_key_enc)
+          }
+        }
+      });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.post("/api/v1/settings/pdp", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const body = request.body as Record<string, unknown>;
+      const token =
+        (typeof body.token === "string" && body.token.trim()) ||
+        (typeof body.apiKey === "string" && body.apiKey.trim()) ||
+        null;
+      if (!token) {
+        return reply.code(400).send({ ok: false, error: "pdp_token_required" });
+      }
+
+      const secret = encryptSecret(token);
+      await deps.pool.query(
+        "INSERT INTO tenant_secrets (tenant_id, pdp_api_key_enc, enc_version, enc_nonce) VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id) DO UPDATE SET pdp_api_key_enc = EXCLUDED.pdp_api_key_enc, enc_version = EXCLUDED.enc_version, enc_nonce = EXCLUDED.enc_nonce, updated_at = now()",
+        [tenant.id, secret.ciphertext, secret.version, secret.nonce]
+      );
+
+      const correlationId =
+        (request.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
+      await recordAuditEvent(deps.pool, {
+        tenantId: tenant.id,
+        correlationId,
+        actor: "api",
+        eventType: "settings.pdp.updated",
+        payload: { provider: process.env.PDP_PROVIDER ?? "mock" }
+      });
+
+      return reply.code(200).send({ ok: true });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  app.post("/api/v1/actions/send-invoice", async (request, reply) => {
+    try {
+      const tenant = await requireTenant(request, deps);
+      const body = request.body as Record<string, unknown>;
+      const ghlInvoiceId =
+        (typeof body.ghlInvoiceId === "string" && body.ghlInvoiceId) ||
+        (typeof body.invoiceId === "string" && body.invoiceId) ||
+        (typeof body.invoice_id === "string" && body.invoice_id) ||
+        (typeof body.invoiceId === "number" && body.invoiceId.toString()) ||
+        (typeof body.invoice_id === "number" && body.invoice_id.toString()) ||
+        "";
+      if (!ghlInvoiceId) {
+        return reply.code(400).send({ ok: false, error: "invoice_id_required" });
+      }
+
+      const correlationId =
+        (request.headers["x-correlation-id"] as string | undefined) ?? randomUUID();
+
+      const invoiceResult = await deps.pool.query(
+        "INSERT INTO invoices (tenant_id, ghl_invoice_id, raw_payload, status) VALUES ($1, $2, $3, 'NEW') ON CONFLICT (tenant_id, ghl_invoice_id) DO UPDATE SET raw_payload = EXCLUDED.raw_payload, updated_at = now() RETURNING id",
+        [tenant.id, ghlInvoiceId, { source: "action.send-invoice", ...body }]
+      );
+      const invoiceId = invoiceResult.rows[0].id as string;
+
+      const enqueueResult = await deps.queue.enqueue(
+        JobType.FETCH_INVOICE,
+        {
+          tenantId: tenant.id,
+          invoiceId,
+          ghlInvoiceId,
+          correlationId
+        },
+        {
+          tenantId: tenant.id,
+          correlationId,
+          idempotencyKey: buildIdempotencyKey(IdempotencyStep.FETCH, tenant.id, ghlInvoiceId)
+        }
+      );
+
+      await recordAuditEvent(deps.pool, {
+        tenantId: tenant.id,
+        correlationId,
+        actor: "action",
+        eventType: "action.send_invoice.received",
+        payload: { ghlInvoiceId, enqueued: enqueueResult.enqueued },
+        invoiceId
+      });
+
+      return reply.code(200).send({ ok: true, invoiceId, enqueued: enqueueResult.enqueued });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+      return reply.code(statusCode).send({ ok: false, error: (error as Error).message });
+    }
   });
 
   app.get("/api/v1/invoices", async (request, reply) => {
@@ -157,7 +276,7 @@ export function buildServer(deps: BuildServerDeps): FastifyInstance {
       reply.header("Content-Type", "application/pdf");
       reply.header(
         "Content-Disposition",
-        `attachment; filename=\"${row.ghl_invoice_id || row.id}.pdf\"`
+        `attachment; filename="${row.ghl_invoice_id || row.id}.pdf"`
       );
       return reply.code(200).send(pdf);
     } catch (error) {
@@ -178,7 +297,7 @@ export function buildServer(deps: BuildServerDeps): FastifyInstance {
       reply.header("Content-Type", "application/xml");
       reply.header(
         "Content-Disposition",
-        `attachment; filename=\"${row.ghl_invoice_id || row.id}.xml\"`
+        `attachment; filename="${row.ghl_invoice_id || row.id}.xml"`
       );
       return reply.code(200).send(xml);
     } catch (error) {

@@ -1,9 +1,9 @@
 import pino from "pino";
 
-export type Logger = ReturnType<typeof pino>;
+export type Logger = pino.Logger<string>;
 
 export function createLogger() {
-  return pino({
+  return pino<string>({
     level: process.env.LOG_LEVEL ?? "info"
   });
 }

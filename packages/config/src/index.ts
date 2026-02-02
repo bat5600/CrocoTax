@@ -55,7 +55,20 @@ export async function resolveTenantFromRequest(
   const rawTenantId = headers["x-tenant-id"];
   const tenantId = Array.isArray(rawTenantId) ? rawTenantId[0] : rawTenantId;
   if (!tenantId || typeof tenantId !== "string") {
-    return null;
+    const rawLocationId = headers["x-ghl-location-id"];
+    const locationId = Array.isArray(rawLocationId) ? rawLocationId[0] : rawLocationId;
+    if (!locationId || typeof locationId !== "string") {
+      return null;
+    }
+
+    const byLocation = await pool.query(
+      "SELECT id, name, status, config FROM tenants WHERE ghl_location_id = $1 AND status = 'active'",
+      [locationId]
+    );
+    if (byLocation.rowCount === 0) {
+      return null;
+    }
+    return byLocation.rows[0] as Tenant;
   }
   const result = await pool.query(
     "SELECT id, name, status, config FROM tenants WHERE id = $1 AND status = 'active'",

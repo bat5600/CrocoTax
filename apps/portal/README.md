@@ -1,4 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CrocoTax Portal (MVP)
+
+This Next.js app is the UI opened from a GoHighLevel custom menu link.
+
+## Local dev
+
+From the repo root:
+
+```bash
+CROCOTAX_API_BASE_URL=http://localhost:3001 npm --workspace apps/portal run dev
+```
+
+The portal proxies `/api/v1/*` to `CROCOTAX_API_BASE_URL` (same-path) to avoid CORS.
+
+## Tenant context
+
+The Settings page expects a GoHighLevel location id in the URL:
+
+- `http://localhost:3000/settings?location_id=LOCATION_ID`
+
+The portal sends it to the API via `x-ghl-location-id`.
+
+---
+
+This app was originally bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
 

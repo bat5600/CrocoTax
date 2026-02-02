@@ -41,10 +41,31 @@ class FileStorageClient implements StorageClient {
 }
 
 class MinioStorageClient implements StorageClient {
-  private client: import("minio").Client;
+  private client: {
+    putObject: (
+      bucket: string,
+      key: string,
+      body: Buffer,
+      size: number,
+      meta: Record<string, string>
+    ) => Promise<unknown>;
+    getObject: (bucket: string, key: string) => Promise<AsyncIterable<Buffer | Uint8Array>>;
+  };
   private bucket: string;
 
-  constructor(client: import("minio").Client, bucket: string) {
+  constructor(
+    client: {
+      putObject: (
+        bucket: string,
+        key: string,
+        body: Buffer,
+        size: number,
+        meta: Record<string, string>
+      ) => Promise<unknown>;
+      getObject: (bucket: string, key: string) => Promise<AsyncIterable<Buffer | Uint8Array>>;
+    },
+    bucket: string
+  ) {
     this.client = client;
     this.bucket = bucket;
   }

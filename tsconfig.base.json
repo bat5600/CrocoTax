@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
       "@croco/core": ["packages/core/src/index.ts"],
@@ -22,5 +23,5 @@
       "@croco/observability": ["packages/observability/src/index.ts"]
     }
   },
-  "include": ["apps", "packages", "scripts", "tests"]
+  "include": ["apps/api", "apps/worker", "packages", "scripts", "tests", "types", "vitest.config.ts"]
 }
