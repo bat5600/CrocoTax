@@ -415,6 +415,15 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Impact/Risk**: No runtime behavior change.
 - **Verification**: Not run (portal toolchain not available in this environment).
 
+### 2026-02-03
+- **What changed**: Added PDFKit-based invoice rendering (`packages/facturx/src/render/pdf.ts`) and shared totals helper (`packages/facturx/src/totals.ts`); enriched CII XML with addresses, tax registrations, payment terms, and totals (`packages/facturx/src/cii.ts`); wired renderer into Factur-X generation (`packages/facturx/src/generator.ts`).
+- **Why**: Produce a real invoice PDF for both Factur-X modes and improve CII content for compliance.
+- **Impact/Risk**: PDF output format changes; new dependency `pdfkit`; stub mode now produces a real PDF (not PDF/A-3) while CLI continues PDF/A-3 + embed. 
+- **Verification**: Not run (tests not executed).
+- **What changed**: Extended canonical schema and GHL mapping with optional party/address/VAT/payment fields (`packages/core/src/canonical.ts`, `packages/ghl/src/mapper.ts`); updated fixtures, docs, and tests for PDF/CII rendering (`fixtures/canonical-invoice.json`, `README.md`, `docs/ops.md`, `tests/unit/*`).
+- **Why**: Carry richer invoice data into PDF/CII and keep docs/tests aligned.
+- **Impact/Risk**: Schema adds optional fields only; no DB migration required.
+- **Verification**: Not run (tests not executed).
 - **What changed**: Adjusted the local `pg` TypeScript shim (`types/pg.d.ts`) to keep backend lint/typecheck passing without the full `@types/pg` package available.
 - **Why**: Ensure `npm run lint` and `npm run typecheck` succeed deterministically in this environment.
 - **Impact/Risk**: The shim uses permissive typings (`any`) and should be replaced by `@types/pg` for stricter typing when dependencies are installed normally.

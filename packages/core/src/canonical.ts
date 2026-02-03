@@ -9,7 +9,16 @@ export const CanonicalLineSchema = z.object({
 
 export const CanonicalPartySchema = z.object({
   name: z.string().min(1),
-  country: z.string().regex(/^[A-Z]{2}$/)
+  country: z.string().regex(/^[A-Z]{2}$/),
+  addressLine1: z.string().min(1).optional(),
+  addressLine2: z.string().min(1).optional(),
+  postalCode: z.string().min(1).optional(),
+  city: z.string().min(1).optional(),
+  state: z.string().min(1).optional(),
+  vatId: z.string().min(1).optional(),
+  taxId: z.string().min(1).optional(),
+  email: z.string().min(1).optional(),
+  phone: z.string().min(1).optional()
 });
 
 export const CanonicalInvoiceSchema = z.object({
@@ -17,9 +26,12 @@ export const CanonicalInvoiceSchema = z.object({
   tenantId: z.string().min(1),
   invoiceNumber: z.string().min(1),
   issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   currency: z.string().regex(/^[A-Z]{3}$/),
   totalAmount: z.number().nonnegative(),
   discountTotal: z.number().nonnegative().optional(),
+  paymentTerms: z.string().min(1).optional(),
+  notes: z.string().min(1).optional(),
   buyer: CanonicalPartySchema,
   seller: CanonicalPartySchema,
   lines: z.array(CanonicalLineSchema).min(1)

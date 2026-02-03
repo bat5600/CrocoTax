@@ -39,8 +39,9 @@ npm test
 - Default API port is `3001` (see `PORT` in `.env`).
 - Webhook secret defaults to `demo-secret` for the seeded tenant.
 - Storage defaults to filesystem (`./storage`).
-- Factur-X generation is stubbed by default (`FACTURX_MODE=stub`).
-- For PDF/A-3 Factur-X, set `FACTURX_MODE=cli` and install `ghostscript` + `qpdf`, then set `PDFA_ICC_PROFILE` to an sRGB `.icc` file.
+- Factur-X rendering uses PDFKit to generate a real invoice PDF.
+- `FACTURX_MODE=stub` renders PDF + XML without PDF/A-3 conversion or XML embedding.
+- For PDF/A-3 Factur-X with embedded XML, set `FACTURX_MODE=cli` and install `ghostscript` + `qpdf`, then set `PDFA_ICC_PROFILE` to an sRGB `.icc` file.
 - Optional PDF/A validation: install `verapdf` and run `VERAPDF_VALIDATE=1 npm run facturx:smoke` (set `VERAPDF_BIN` if not on PATH).
 - For PDFBox attachment support, set `PDFBOX_JAR` to the local `pdfbox-app-3.x.x.jar` path (used to set AFRelationship and OutputIntent).
 - PDP integration: set `PDP_PROVIDER`, `PDP_API_BASE`, `PDP_API_KEY`. Use `PDP_ARTIFACT_MODE=base64` to send artifact contents or `keys` to send storage keys only. Reconciliation runs on `PDP_RECONCILE_INTERVAL_MS`.
