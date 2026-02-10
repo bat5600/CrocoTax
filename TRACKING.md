@@ -424,6 +424,16 @@ Use one entry per meaningful change. Keep entries short, factual, and actionable
 - **Why**: Carry richer invoice data into PDF/CII and keep docs/tests aligned.
 - **Impact/Risk**: Schema adds optional fields only; no DB migration required.
 - **Verification**: Not run (tests not executed).
+
+### 2026-02-04
+- **What changed**: Adjusted invoice totals calculation to align PDF/XML totals with discount handling; updated PDF total display to use due payable amount (`packages/facturx/src/totals.ts`, `packages/facturx/src/render/pdf.ts`, `packages/facturx/src/cii.ts`).
+- **Why**: Fix inconsistencies between header tax basis, grand total, and due payable amounts when discounts are present.
+- **Impact/Risk**: Totals in generated PDF/CII may change (now consistent with line sums minus discount).
+- **Verification**: `npm test`.
+- **What changed**: Updated GHL mapper to omit undefined optional fields and expanded base GHL fixture with address/payment data (`packages/ghl/src/mapper.ts`, `fixtures/ghl-invoice.json`).
+- **Why**: Keep mapper output consistent with canonical fixture and avoid undefined optional fields in payloads.
+- **Impact/Risk**: Canonical payloads no longer include undefined keys for optional fields.
+- **Verification**: `npm test`.
 - **What changed**: Adjusted the local `pg` TypeScript shim (`types/pg.d.ts`) to keep backend lint/typecheck passing without the full `@types/pg` package available.
 - **Why**: Ensure `npm run lint` and `npm run typecheck` succeed deterministically in this environment.
 - **Impact/Risk**: The shim uses permissive typings (`any`) and should be replaced by `@types/pg` for stricter typing when dependencies are installed normally.

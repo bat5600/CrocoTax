@@ -24,9 +24,9 @@ export function computeInvoiceTotals(invoice: CanonicalInvoice): InvoiceTotals {
     )
   );
   const discountTotal = round2(Math.max(0, invoice.discountTotal ?? 0));
-  const taxBasisTotal = round2(Math.max(0, netTotal - discountTotal));
+  const taxBasisTotal = netTotal;
   const grandTotal = round2(netTotal + taxTotal - discountTotal);
-  const dueTotal = round2(invoice.totalAmount);
+  const dueTotal = grandTotal;
 
   return {
     netTotal,

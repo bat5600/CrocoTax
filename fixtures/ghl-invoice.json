@@ -3,16 +3,27 @@
   "invoiceId": "inv_123",
   "invoiceNumber": "INV-2026-0001",
   "issueDate": "2026-01-25",
+  "dueDate": "2026-02-10",
+  "paymentTerms": "Paiement a 30 jours",
+  "notes": "Merci pour votre confiance",
   "updatedAt": "2026-01-25T12:00:00Z",
   "currency": "EUR",
   "totalAmount": 120.0,
   "customer": {
     "name": "Acme Buyer",
-    "country": "FR"
+    "country": "FR",
+    "address1": "1 Rue de Paris",
+    "postalCode": "75001",
+    "city": "Paris",
+    "vatId": "FR123456789"
   },
   "seller": {
     "name": "CrocoClick Demo",
-    "country": "FR"
+    "country": "FR",
+    "address1": "2 Avenue de Lyon",
+    "postalCode": "69001",
+    "city": "Lyon",
+    "email": "billing@crococlick.example"
   },
   "lines": [
     {

@@ -96,21 +96,31 @@ function buildParty(
   fallbackName: string,
   fallbackCountry: string
 ): CanonicalInvoice["buyer"] {
-  return {
+  const party: CanonicalInvoice["buyer"] = {
     name: asString(pick(record?.name, record?.fullName, record?.company), fallbackName),
-    country: normalizeCountry(pick(record?.country, record?.countryCode, fallbackCountry)),
-    addressLine1: asOptionalString(
-      pick(record?.address, record?.address1, record?.street, record?.line1)
-    ),
-    addressLine2: asOptionalString(pick(record?.address2, record?.line2)),
-    postalCode: asOptionalString(pick(record?.postalCode, record?.zip)),
-    city: asOptionalString(pick(record?.city, record?.town)),
-    state: asOptionalString(pick(record?.state, record?.region)),
-    vatId: asOptionalString(pick(record?.vatId, record?.vatNumber)),
-    taxId: asOptionalString(pick(record?.taxId)),
-    email: asOptionalString(pick(record?.email)),
-    phone: asOptionalString(pick(record?.phone, record?.phoneNumber))
+    country: normalizeCountry(pick(record?.country, record?.countryCode, fallbackCountry))
   };
+  const addressLine1 = asOptionalString(
+    pick(record?.address, record?.address1, record?.street, record?.line1)
+  );
+  if (addressLine1) party.addressLine1 = addressLine1;
+  const addressLine2 = asOptionalString(pick(record?.address2, record?.line2));
+  if (addressLine2) party.addressLine2 = addressLine2;
+  const postalCode = asOptionalString(pick(record?.postalCode, record?.zip));
+  if (postalCode) party.postalCode = postalCode;
+  const city = asOptionalString(pick(record?.city, record?.town));
+  if (city) party.city = city;
+  const state = asOptionalString(pick(record?.state, record?.region));
+  if (state) party.state = state;
+  const vatId = asOptionalString(pick(record?.vatId, record?.vatNumber));
+  if (vatId) party.vatId = vatId;
+  const taxId = asOptionalString(pick(record?.taxId));
+  if (taxId) party.taxId = taxId;
+  const email = asOptionalString(pick(record?.email));
+  if (email) party.email = email;
+  const phone = asOptionalString(pick(record?.phone, record?.phoneNumber));
+  if (phone) party.phone = phone;
+  return party;
 }
 
 function extractLines(input: Record<string, unknown>): CanonicalInvoice["lines"] {
@@ -188,12 +198,9 @@ export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): Canonica
     tenantId,
     invoiceNumber,
     issueDate,
-    dueDate,
     currency,
     totalAmount,
     discountTotal: discountTotal > 0 ? discountTotal : undefined,
-    paymentTerms,
-    notes,
     buyer: {
       ...buildParty(buyer, "Buyer", "FR")
     },
@@ -203,6 +210,15 @@ export function mapGhlToCanonical(tenantId: string, input: GhlInvoice): Canonica
     },
     lines
   };
+  if (dueDate) {
+    canonical.dueDate = dueDate;
+  }
+  if (paymentTerms) {
+    canonical.paymentTerms = paymentTerms;
+  }
+  if (notes) {
+    canonical.notes = notes;
+  }
 
   const parsed = CanonicalInvoiceSchema.safeParse(canonical);
   if (!parsed.success) {

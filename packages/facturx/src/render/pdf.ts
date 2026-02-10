@@ -206,7 +206,7 @@ export async function renderInvoicePdf(invoice: CanonicalInvoice): Promise<Buffe
   if (totals.discountTotal > 0) {
     drawTotalRow("Remise", `-${formatMoney(totals.discountTotal, invoice.currency)}`);
   }
-  drawTotalRow("Total TTC", formatMoney(totals.grandTotal, invoice.currency), true, 12);
+  drawTotalRow("Total TTC", formatMoney(totals.dueTotal, invoice.currency), true, 12);
 
   const notes: string[] = [];
   if (invoice.paymentTerms) {
