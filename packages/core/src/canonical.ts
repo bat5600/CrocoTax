@@ -53,3 +53,5 @@ export const CanonicalInvoiceSchema = z.object({
 });
 
 export type CanonicalInvoice = z.infer<typeof CanonicalInvoiceSchema>;
+export type CanonicalParty = z.infer<typeof CanonicalPartySchema>;
+export type CanonicalLine = z.infer<typeof CanonicalLineSchema>;

@@ -6,7 +6,7 @@ function makeCtx(overrides: Partial<WorkerContext> = {}): WorkerContext {
   return {
     pool: {} as WorkerContext["pool"],
     queue: { enqueue: vi.fn().mockResolvedValue({ enqueued: true }) } as unknown as WorkerContext["queue"],
-    logger: { info: vi.fn(), error: vi.fn() } as unknown as WorkerContext["logger"],
+    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as WorkerContext["logger"],
     ghlClient: {} as WorkerContext["ghlClient"],
     facturxGenerator: {} as WorkerContext["facturxGenerator"],
     storageClient: {} as WorkerContext["storageClient"],
@@ -45,7 +45,7 @@ describe("PDP reconcile handler", () => {
       {
         id: "job_1",
         type: JobType.RECONCILE_PDP,
-        payload: { correlationId: "corr_1", limit: 10 },
+        payload: { tenantId: "tenant_1", correlationId: "corr_1", limit: 10 },
         attempts: 0,
         maxAttempts: 5
       },

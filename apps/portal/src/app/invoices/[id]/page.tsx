@@ -1,59 +1,153 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { PortalLayout } from "@/components/portal-layout";
+import { apiFetch, getTenantId, displayStatus, statusTone } from "@/lib/api";
 
-type InvoiceDetailPageProps = {
-  params: { id: string };
-};
+interface InvoiceDetail {
+  id: string;
+  tenant_id: string;
+  ghl_invoice_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  latest_pdp_status: string | null;
+  latest_pdp_provider: string | null;
+  latest_pdp_submission_id: string | null;
+  latest_pdp_last_error: string | null;
+  latest_pdp_status_raw: unknown;
+  raw_payload: unknown;
+  canonical_payload: Record<string, unknown> | null;
+  latest_pdf_key: string | null;
+  latest_xml_key: string | null;
+}
 
-const TIMELINE = [
-  {
-    title: "Accepted by PDP",
-    meta: "2026-01-29 09:14",
-    status: "ok"
-  },
-  {
-    title: "Submitted to PDP",
-    meta: "2026-01-29 09:10",
-    status: "ok"
-  },
-  {
-    title: "Mapped to Factur-X",
-    meta: "2026-01-29 09:06",
-    status: "ok"
-  },
-  {
-    title: "Received from GHL",
-    meta: "2026-01-29 09:02",
-    status: "ok"
+interface AuditEvent {
+  id: string;
+  event_type: string;
+  actor: string;
+  payload: unknown;
+  created_at: string;
+}
+
+export default function InvoiceDetailPage() {
+  const params = useParams();
+  const invoiceId = params.id as string;
+
+  const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      setError("NO_TENANT");
+      setLoading(false);
+      return;
+    }
+
+    Promise.all([
+      apiFetch<{ ok: boolean; invoice: InvoiceDetail }>(`invoices/${invoiceId}`),
+      apiFetch<{ ok: boolean; events: AuditEvent[] }>(`invoices/${invoiceId}/audit`).catch(
+        () => ({ ok: false, events: [] })
+      ),
+    ])
+      .then(([invData, auditData]) => {
+        setInvoice(invData.invoice);
+        setEvents(auditData.events ?? []);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [invoiceId]);
+
+  if (error === "NO_TENANT") {
+    return (
+      <PortalLayout title="Invoice Detail" activeNav="Invoices">
+        <section className="panel fade-up" style={{ padding: "2rem", textAlign: "center" }}>
+          <h3>Configure tenant</h3>
+          <p className="muted">
+            Set <code>crocotax_tenant_id</code> in localStorage to view invoice details.
+          </p>
+        </section>
+      </PortalLayout>
+    );
   }
-];
 
-const AUDIT = [
-  {
-    label: "Webhook received",
-    value: "200 OK - ghl.invoice.created"
-  },
-  {
-    label: "Validation",
-    value: "Factur-X EN 16931 profile"
-  },
-  {
-    label: "PDP reference",
-    value: "FR-PDP-AX1-7782"
+  if (loading) {
+    return (
+      <PortalLayout title={`Invoice ${invoiceId}`} activeNav="Invoices">
+        <p style={{ padding: "2rem", textAlign: "center" }} className="muted">
+          Loading invoice...
+        </p>
+      </PortalLayout>
+    );
   }
-];
 
-export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
-  const invoiceId = params.id ?? "INV-2026-9912";
+  if (error || !invoice) {
+    return (
+      <PortalLayout title={`Invoice ${invoiceId}`} activeNav="Invoices">
+        <section className="panel fade-up" style={{ padding: "2rem", textAlign: "center" }}>
+          <h3>Unable to load invoice</h3>
+          <p className="muted">{error ?? "Invoice not found."}</p>
+        </section>
+      </PortalLayout>
+    );
+  }
+
+  const cp = invoice.canonical_payload ?? {};
+  const buyerName = String(cp.buyer_name ?? cp.customer_name ?? "—");
+  const buyerSiret = String(cp.buyer_siret ?? cp.siret ?? "");
+  const totalAmount = cp.total_amount != null ? `EUR ${cp.total_amount}` : "—";
+  const subtotal = cp.subtotal != null ? `EUR ${cp.subtotal}` : "—";
+  const vatAmount = cp.vat_amount != null ? `EUR ${cp.vat_amount}` : "—";
+  const issueDate = String(cp.issue_date ?? invoice.created_at?.slice(0, 10) ?? "—");
+  const dueDate = String(cp.due_date ?? "—");
+  const label = displayStatus(invoice.status);
+  const tone = statusTone(label);
+
+  const pdfUrl = `/api/v1/invoices/${invoice.id}/artifacts/pdf`;
+  const xmlUrl = `/api/v1/invoices/${invoice.id}/artifacts/xml`;
+
+  // Build timeline from audit events, falling back to status-based timeline
+  const timeline =
+    events.length > 0
+      ? events
+          .slice()
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 10)
+          .map((e) => ({
+            title: e.event_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            meta: new Date(e.created_at).toLocaleString(),
+            status: "ok",
+          }))
+      : [
+          {
+            title: `Status: ${label}`,
+            meta: new Date(invoice.updated_at).toLocaleString(),
+            status: tone,
+          },
+          {
+            title: "Invoice created",
+            meta: new Date(invoice.created_at).toLocaleString(),
+            status: "ok",
+          },
+        ];
 
   return (
     <PortalLayout
-      title={`Invoice ${invoiceId}`}
+      title={`Invoice ${invoice.ghl_invoice_id ?? invoiceId}`}
       subtitle="Delivery overview and compliance trace."
       activeNav="Invoices"
       actions={
         <>
-          <button className="ghost-btn">Download PDF</button>
-          <button className="ghost-btn">Download XML</button>
+          <a className="ghost-btn" href={pdfUrl} target="_blank" rel="noopener noreferrer">
+            Download PDF
+          </a>
+          <a className="ghost-btn" href={xmlUrl} target="_blank" rel="noopener noreferrer">
+            Download XML
+          </a>
           <button className="primary-btn">Resend</button>
         </>
       }
@@ -63,21 +157,21 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
           <div className="hero-main">
             <div>
               <p className="hero-label">Buyer</p>
-              <h3>ACME SAS</h3>
-              <p className="muted">SIRET 812 332 901 00012</p>
+              <h3>{buyerName}</h3>
+              {buyerSiret && <p className="muted">SIRET {buyerSiret}</p>}
             </div>
             <div className="hero-amount">
               <p className="hero-label">Total</p>
-              <h2>EUR 4,520.00</h2>
-              <span className="status-pill ok">Accepted</span>
+              <h2>{totalAmount}</h2>
+              <span className={`status-pill ${tone}`}>{label}</span>
             </div>
           </div>
           <div className="hero-meta">
             {[
-              { label: "Issue date", value: "2026-01-29" },
-              { label: "Due date", value: "2026-02-12" },
-              { label: "Tenant", value: "GHL Paris" },
-              { label: "PDP", value: "PDP Alpha FR-001" }
+              { label: "Issue date", value: issueDate },
+              { label: "Due date", value: dueDate },
+              { label: "Tenant", value: invoice.tenant_id },
+              { label: "PDP", value: invoice.latest_pdp_provider ?? "—" },
             ].map((item) => (
               <div key={item.label} className="meta-item">
                 <span>{item.label}</span>
@@ -96,17 +190,18 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
                 <h3>Status timeline</h3>
                 <p>Real-time submission history.</p>
               </div>
-              <span className="pill">Latency 8m</span>
             </div>
             <div className="timeline">
-              {TIMELINE.map((item) => (
-                <div key={item.title} className="timeline-item">
+              {timeline.map((item, idx) => (
+                <div key={idx} className="timeline-item">
                   <span className={`timeline-dot ${item.status}`} />
                   <div>
                     <p className="timeline-title">{item.title}</p>
                     <p className="timeline-meta">{item.meta}</p>
                   </div>
-                  <span className={`status-pill ${item.status}`}>OK</span>
+                  <span className={`status-pill ${item.status}`}>
+                    {item.status === "ok" ? "OK" : item.status === "failed" ? "FAIL" : "..."}
+                  </span>
                 </div>
               ))}
             </div>
@@ -121,10 +216,9 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
             </div>
             <div className="key-values">
               {[
-                { label: "Subtotal", value: "EUR 3,760.00" },
-                { label: "VAT (20%)", value: "EUR 752.00" },
-                { label: "Discount", value: "EUR 0.00" },
-                { label: "Total", value: "EUR 4,520.00" }
+                { label: "Subtotal", value: subtotal },
+                { label: "VAT", value: vatAmount },
+                { label: "Total", value: totalAmount },
               ].map((row) => (
                 <div key={row.label} className="key-value">
                   <span>{row.label}</span>
@@ -141,9 +235,21 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
             <p className="muted">Stored in Factur-X vault.</p>
             <div className="artifact-list">
               {[
-                { label: "Factur-X PDF/A", value: "Ready", tone: "ok" },
-                { label: "Embedded XML", value: "Ready", tone: "ok" },
-                { label: "PDP receipt", value: "Stored", tone: "pending" }
+                {
+                  label: "Factur-X PDF/A",
+                  value: invoice.latest_pdf_key ? "Ready" : "Not available",
+                  tone: invoice.latest_pdf_key ? "ok" : "pending",
+                },
+                {
+                  label: "Embedded XML",
+                  value: invoice.latest_xml_key ? "Ready" : "Not available",
+                  tone: invoice.latest_xml_key ? "ok" : "pending",
+                },
+                {
+                  label: "PDP submission",
+                  value: invoice.latest_pdp_submission_id ?? "—",
+                  tone: invoice.latest_pdp_submission_id ? "ok" : "pending",
+                },
               ].map((artifact) => (
                 <div key={artifact.label} className="artifact-row">
                   <div>
@@ -162,12 +268,21 @@ export default function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
             <h3>Audit trail</h3>
             <p className="muted">Latest system checkpoints.</p>
             <div className="audit-list">
-              {AUDIT.map((item) => (
-                <div key={item.label} className="audit-row">
-                  <span>{item.label}</span>
-                  <span className="muted">{item.value}</span>
-                </div>
-              ))}
+              {events.length === 0 ? (
+                <p className="muted" style={{ padding: "1rem 0" }}>No audit events recorded.</p>
+              ) : (
+                events.map((e) => (
+                  <div key={e.id} className="audit-row">
+                    <span>
+                      {e.event_type.replace(/_/g, " ")}
+                      {e.actor ? ` (${e.actor})` : ""}
+                    </span>
+                    <span className="muted">
+                      {new Date(e.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </article>
         </div>

@@ -1,4 +1,6 @@
-import { ReactNode } from "react";
+"use client";
+
+import { ReactNode, useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   "Dashboard",
@@ -25,6 +27,13 @@ export function PortalLayout({
   actions,
   children
 }: PortalLayoutProps) {
+  const [tenantName, setTenantName] = useState("Loading...");
+
+  useEffect(() => {
+    const id = localStorage.getItem("crocotax_tenant_id");
+    setTenantName(id ?? "No tenant configured");
+  }, []);
+
   return (
     <div className="app-shell">
       <aside className="side-rail">
@@ -52,8 +61,7 @@ export function PortalLayout({
         <div className="side-footer">
           <div className="tenant-card">
             <p className="tenant-label">Active tenant</p>
-            <p className="tenant-name">GHL Paris Region</p>
-            <p className="tenant-meta">60k invoices / month</p>
+            <p className="tenant-name">{tenantName}</p>
           </div>
         </div>
       </aside>

@@ -72,7 +72,7 @@ async function storeArtifacts(
   return { pdfKey, xmlKey };
 }
 
-function mapPdpStatusToInvoice(status: string): string {
+export function mapPdpStatusToInvoice(status: string, logger?: Logger): string {
   const normalized = status.toUpperCase();
   if (normalized === "ACCEPTED") return "ACCEPTED";
   if (normalized === "REJECTED") return "REJECTED";
@@ -80,15 +80,17 @@ function mapPdpStatusToInvoice(status: string): string {
   if (normalized === "SUBMITTED" || normalized === "PROCESSING" || normalized === "PENDING") {
     return "SYNCED";
   }
+  if (normalized === "ERROR" || normalized === "FAILED") return "ERROR";
+  logger?.warn({ rawStatus: status }, "pdp.unknown_status_mapped_to_synced");
   return "SYNCED";
 }
 
-function isPendingStatus(status: string): boolean {
+export function isPendingStatus(status: string): boolean {
   const normalized = status.toUpperCase();
   return ["SUBMITTED", "PROCESSING", "PENDING", "SYNCED"].includes(normalized);
 }
 
-function computeNextRun(attempts: number, maxMs = 10 * 60 * 1000): Date {
+export function computeNextRun(attempts: number, maxMs = 10 * 60 * 1000): Date {
   const delay = Math.min(Math.pow(2, Math.max(attempts, 1)) * 1000, maxMs);
   return new Date(Date.now() + delay);
 }
@@ -389,7 +391,7 @@ export function createHandlers(ctx: WorkerContext): Handlers {
         status: status.status,
         statusRaw: status.raw ?? null
       });
-      const mappedStatus = mapPdpStatusToInvoice(status.status);
+      const mappedStatus = mapPdpStatusToInvoice(status.status, ctx.logger);
       await updateInvoiceStatus(ctx.pool, job.payload.tenantId, job.payload.invoiceId, mappedStatus);
 
       if (mappedStatus !== "ERROR") {
@@ -437,6 +439,10 @@ export function createHandlers(ctx: WorkerContext): Handlers {
       const correlationId = correlationIdFrom(job);
       const limit = job.payload.limit ?? 25;
       const olderThanMinutes = Number(process.env.PDP_RECONCILE_OLDER_MINUTES ?? 15);
+      if (!job.payload.tenantId) {
+        ctx.logger.warn({ correlationId }, "reconcile_pdp.skipped_no_tenant");
+        return;
+      }
       const pending = await listPendingSubmissions(ctx.pool, {
         tenantId: job.payload.tenantId,
         olderThanMinutes,

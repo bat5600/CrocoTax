@@ -356,6 +356,7 @@ export function buildServer(deps: BuildServerDeps) {
 
       if (!verifyWebhook(signature, rawBody, webhookSecret)) {
         incCounter("webhook_invalid_signature_total", { tenantId: tenant.id });
+        deps.logger.warn({ tenantId: tenant.id, hasSignature: Boolean(signature) }, "webhook.invalid_signature");
         return reply.code(401).send({ ok: false, error: "invalid_signature" });
       }
 
