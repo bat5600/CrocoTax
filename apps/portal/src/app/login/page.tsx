@@ -1,4 +1,27 @@
+"use client";
+
+import { useState } from "react";
+
 export default function LoginPage() {
+  const [tenantId, setTenantId] = useState("");
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId.trim()) {
+      setError("Tenant ID is required.");
+      return;
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("crocotax_tenant_id", tenantId.trim());
+      if (token.trim()) {
+        localStorage.setItem("crocotax_api_token", token.trim());
+      }
+      window.location.href = "/";
+    }
+  }
+
   return (
     <div className="login-shell">
       <div className="login-card fade-up">
@@ -12,19 +35,26 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <form className="login-form">
+        <form className="login-form" onSubmit={handleSubmit}>
           <label className="field">
-            <span>Email</span>
-            <input type="email" placeholder="ops@croco.tax" />
+            <span>Tenant ID</span>
+            <input
+              type="text"
+              placeholder="uuid or GHL location ID"
+              value={tenantId}
+              onChange={(e) => setTenantId(e.target.value)}
+            />
           </label>
           <label className="field">
-            <span>Password</span>
-            <input type="password" placeholder="••••••••" />
+            <span>API Token (optional)</span>
+            <input
+              type="password"
+              placeholder="ct_live_..."
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
           </label>
-          <label className="field">
-            <span>Tenant token</span>
-            <input type="text" placeholder="ct_live_..." />
-          </label>
+          {error && <p style={{ color: "var(--red, #ef4444)" }}>{error}</p>}
           <button className="primary-btn" type="submit">
             Sign in
           </button>
@@ -44,9 +74,9 @@ export default function LoginPage() {
           </p>
           <div className="aside-metrics">
             {[
-              { label: "Invoices today", value: "3,812" },
-              { label: "Accepted", value: "3,712" },
-              { label: "Exceptions", value: "12" }
+              { label: "Factur-X compliant", value: "EN 16931" },
+              { label: "PDP integration", value: "SUPER PDP" },
+              { label: "Audit trail", value: "SHA-256" }
             ].map((item) => (
               <div key={item.label} className="aside-metric">
                 <span>{item.label}</span>

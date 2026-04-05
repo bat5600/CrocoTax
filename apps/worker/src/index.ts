@@ -42,17 +42,24 @@ setInterval(async () => {
   try {
     const correlationId = randomUUID();
     const bucket = Math.floor(Date.now() / reconcileIntervalMs);
-    await queue.enqueue(
-      JobType.RECONCILE_PDP,
-      {
-        correlationId,
-        limit: env.pdpReconcileBatch
-      },
-      {
-        idempotencyKey: `RECONCILE:${bucket}`,
-        correlationId
-      }
+    const tenants = await pool.query(
+      "SELECT id FROM tenants WHERE status = 'active'"
     );
+    for (const tenant of tenants.rows) {
+      await queue.enqueue(
+        JobType.RECONCILE_PDP,
+        {
+          correlationId,
+          tenantId: tenant.id,
+          limit: env.pdpReconcileBatch
+        },
+        {
+          tenantId: tenant.id,
+          idempotencyKey: `RECONCILE:${tenant.id}:${bucket}`,
+          correlationId
+        }
+      );
+    }
   } catch (error) {
     logger.error({ error }, "pdp.reconcile.enqueue_failed");
   }

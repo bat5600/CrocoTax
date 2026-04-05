@@ -1,75 +1,81 @@
-import { PortalLayout } from "@/components/portal-layout";
+"use client";
 
-const INVOICES = [
-  {
-    id: "INV-2026-9912",
-    buyer: "ACME SAS",
-    tenant: "GHL Paris",
-    amount: "EUR 4,520.00",
-    status: "Accepted",
-    statusTone: "ok",
-    pdp: "Delivered",
-    pdpTone: "ok",
-    updated: "12m"
-  },
-  {
-    id: "INV-2026-9909",
-    buyer: "Nova Retail",
-    tenant: "GHL Lyon",
-    amount: "EUR 1,140.00",
-    status: "Submitted",
-    statusTone: "pending",
-    pdp: "In review",
-    pdpTone: "pending",
-    updated: "28m"
-  },
-  {
-    id: "INV-2026-9902",
-    buyer: "Lumen Group",
-    tenant: "GHL Nantes",
-    amount: "EUR 860.00",
-    status: "Action needed",
-    statusTone: "review",
-    pdp: "Missing VAT",
-    pdpTone: "review",
-    updated: "1h"
-  },
-  {
-    id: "INV-2026-9891",
-    buyer: "Atelier 72",
-    tenant: "GHL Paris",
-    amount: "EUR 3,320.00",
-    status: "Rejected",
-    statusTone: "failed",
-    pdp: "Schema error",
-    pdpTone: "failed",
-    updated: "2h"
-  },
-  {
-    id: "INV-2026-9877",
-    buyer: "Plume Hotels",
-    tenant: "GHL Lille",
-    amount: "EUR 2,015.00",
-    status: "Accepted",
-    statusTone: "ok",
-    pdp: "Delivered",
-    pdpTone: "ok",
-    updated: "3h"
-  },
-  {
-    id: "INV-2026-9862",
-    buyer: "Sable SAS",
-    tenant: "GHL Marseille",
-    amount: "EUR 620.00",
-    status: "Pending",
-    statusTone: "pending",
-    pdp: "Queued",
-    pdpTone: "pending",
-    updated: "4h"
-  }
-];
+import { useEffect, useState } from "react";
+import { PortalLayout } from "@/components/portal-layout";
+import {
+  apiFetch,
+  getTenantId,
+  displayStatus,
+  statusTone,
+  matchesFilter,
+  relativeTime,
+  type FilterCategory,
+} from "@/lib/api";
+
+interface Invoice {
+  id: string;
+  tenant_id: string;
+  ghl_invoice_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  latest_pdp_status: string | null;
+  latest_pdp_provider: string | null;
+  latest_pdp_submission_id: string | null;
+  latest_pdp_last_error: string | null;
+  canonical_payload?: Record<string, unknown>;
+}
+
+interface InvoicesResponse {
+  ok: boolean;
+  invoices: Invoice[];
+  nextCursor?: string;
+}
+
+const FILTERS: FilterCategory[] = ["All", "Accepted", "Pending", "Rejected"];
 
 export default function InvoicesPage() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterCategory>("All");
+
+  useEffect(() => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      setError("NO_TENANT");
+      setLoading(false);
+      return;
+    }
+
+    apiFetch<InvoicesResponse>("invoices")
+      .then((data) => setInvoices(data.invoices ?? []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (error === "NO_TENANT") {
+    return (
+      <PortalLayout title="Invoice Queue" activeNav="Invoices">
+        <section className="panel fade-up" style={{ padding: "2rem", textAlign: "center" }}>
+          <h3>Configure tenant</h3>
+          <p className="muted">
+            Set <code>crocotax_tenant_id</code> in localStorage to view invoices.
+          </p>
+        </section>
+      </PortalLayout>
+    );
+  }
+
+  const displayed = invoices.filter((inv) =>
+    matchesFilter(displayStatus(inv.status), filter)
+  );
+
+  const accepted = invoices.filter((i) => ["Accepted", "Paid"].includes(displayStatus(i.status))).length;
+  const pending = invoices.filter((i) => ["Pending", "Processing"].includes(displayStatus(i.status))).length;
+  const rejected = invoices.filter((i) => ["Rejected", "Error"].includes(displayStatus(i.status))).length;
+  const acceptPct = invoices.length > 0 ? Math.round((accepted / invoices.length) * 100) : 0;
+
   return (
     <PortalLayout
       title="Invoice Queue"
@@ -91,15 +97,15 @@ export default function InvoicesPage() {
           />
         </div>
         <div className="filter-group">
-          <button className="filter-pill active">All</button>
-          <button className="filter-pill">Accepted</button>
-          <button className="filter-pill">Pending</button>
-          <button className="filter-pill">Exceptions</button>
-          <select className="filter-select" defaultValue="24h">
-            <option value="24h">Last 24h</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              className={`filter-pill ${filter === f ? "active" : ""}`}
+              onClick={() => setFilter(f)}
+            >
+              {f}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -112,74 +118,83 @@ export default function InvoicesPage() {
             </div>
             <button className="ghost-btn small">Export CSV</button>
           </div>
-          <div className="invoice-table">
-            <div className="invoice-row header">
-              <span>Invoice</span>
-              <span>Tenant</span>
-              <span>Amount</span>
-              <span>Status</span>
-              <span>PDP</span>
-              <span>Updated</span>
-              <span></span>
-            </div>
-            {INVOICES.map((invoice) => (
-              <div key={invoice.id} className="invoice-row">
-                <div className="invoice-main">
-                  <p className="invoice-id">{invoice.id}</p>
-                  <p className="invoice-meta">{invoice.buyer}</p>
-                </div>
-                <span className="invoice-tenant">{invoice.tenant}</span>
-                <span className="invoice-amount">{invoice.amount}</span>
-                <span className={`status-pill ${invoice.statusTone}`}>
-                  {invoice.status}
-                </span>
-                <span className={`status-pill ${invoice.pdpTone}`}>
-                  {invoice.pdp}
-                </span>
-                <span className="invoice-updated">{invoice.updated}</span>
-                <a className="link-btn" href={`/invoices/${invoice.id}`}>
-                  View
-                </a>
+
+          {loading ? (
+            <p style={{ padding: "2rem", textAlign: "center" }} className="muted">
+              Loading invoices...
+            </p>
+          ) : error ? (
+            <p style={{ padding: "2rem", textAlign: "center" }} className="muted">
+              Failed to load invoices: {error}
+            </p>
+          ) : displayed.length === 0 ? (
+            <p style={{ padding: "2rem", textAlign: "center" }} className="muted">
+              No invoices found.
+            </p>
+          ) : (
+            <div className="invoice-table">
+              <div className="invoice-row header">
+                <span>Invoice</span>
+                <span>Tenant</span>
+                <span>Amount</span>
+                <span>Status</span>
+                <span>PDP</span>
+                <span>Updated</span>
+                <span></span>
               </div>
-            ))}
-          </div>
+              {displayed.map((invoice) => {
+                const label = displayStatus(invoice.status);
+                const tone = statusTone(label);
+                const pdpLabel = invoice.latest_pdp_status ?? "—";
+                const buyer =
+                  (invoice.canonical_payload as Record<string, unknown>)
+                    ?.buyer_name ??
+                  invoice.ghl_invoice_id;
+                const amount =
+                  (invoice.canonical_payload as Record<string, unknown>)
+                    ?.total_amount ?? "—";
+
+                return (
+                  <div key={invoice.id} className="invoice-row">
+                    <div className="invoice-main">
+                      <p className="invoice-id">{invoice.ghl_invoice_id ?? invoice.id}</p>
+                      <p className="invoice-meta">{String(buyer)}</p>
+                    </div>
+                    <span className="invoice-tenant">{invoice.tenant_id}</span>
+                    <span className="invoice-amount">{String(amount)}</span>
+                    <span className={`status-pill ${tone}`}>{label}</span>
+                    <span className={`status-pill pending`}>{pdpLabel}</span>
+                    <span className="invoice-updated">
+                      {relativeTime(invoice.updated_at)}
+                    </span>
+                    <a className="link-btn" href={`/invoices/${invoice.id}`}>
+                      View
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="stack">
           <article className="panel fade-up" style={{ animationDelay: "0.12s" }}>
             <h3>Queue health</h3>
             <p className="muted">
-              92% accepted in the last 24h across all tenants.
+              {acceptPct}% accepted across loaded invoices.
             </p>
             <div className="meter">
-              <span style={{ width: "92%" }} />
+              <span style={{ width: `${acceptPct}%` }} />
             </div>
             <div className="metric-list">
               {[
-                { label: "Accepted", value: "3,712" },
-                { label: "Pending", value: "318" },
-                { label: "Rejected", value: "12" }
+                { label: "Accepted", value: String(accepted) },
+                { label: "Pending", value: String(pending) },
+                { label: "Rejected", value: String(rejected) },
               ].map((metric) => (
                 <div key={metric.label} className="metric-row">
                   <span>{metric.label}</span>
                   <strong>{metric.value}</strong>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="panel fade-up" style={{ animationDelay: "0.18s" }}>
-            <h3>Top tenants</h3>
-            <p className="muted">Volumes driving todays pipeline.</p>
-            <div className="tenant-list">
-              {[
-                { label: "GHL Paris", value: "1,820 invoices" },
-                { label: "GHL Lyon", value: "1,104 invoices" },
-                { label: "GHL Nantes", value: "610 invoices" }
-              ].map((tenant) => (
-                <div key={tenant.label} className="tenant-row">
-                  <span>{tenant.label}</span>
-                  <span className="muted">{tenant.value}</span>
                 </div>
               ))}
             </div>

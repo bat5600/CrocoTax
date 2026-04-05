@@ -1,6 +1,77 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { PortalLayout } from "@/components/portal-layout";
+import { apiFetch, getTenantId, displayStatus, statusTone, relativeTime } from "@/lib/api";
+
+interface Invoice {
+  id: string;
+  ghl_invoice_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  latest_pdp_status: string | null;
+}
+
+interface InvoicesResponse {
+  ok: boolean;
+  invoices: Invoice[];
+}
 
 export default function Home() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      setError("NO_TENANT");
+      setLoading(false);
+      return;
+    }
+
+    apiFetch<InvoicesResponse>("invoices?limit=200")
+      .then((data) => setInvoices(data.invoices ?? []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Compute KPIs
+  const total = invoices.length;
+  const accepted = invoices.filter((i) =>
+    ["Accepted", "Paid"].includes(displayStatus(i.status))
+  ).length;
+  const pending = invoices.filter((i) =>
+    ["Pending", "Processing"].includes(displayStatus(i.status))
+  ).length;
+  const rejected = invoices.filter((i) =>
+    ["Rejected", "Error"].includes(displayStatus(i.status))
+  ).length;
+
+  // Flow funnel counts
+  const received = total;
+  const mapped = invoices.filter((i) =>
+    !["NEW", "FETCHED"].includes((i.status ?? "").toUpperCase())
+  ).length;
+  const submitted = invoices.filter((i) =>
+    ["SUBMITTED", "SYNCED", "ACCEPTED", "REJECTED", "PAID", "ERROR"].includes(
+      (i.status ?? "").toUpperCase()
+    )
+  ).length;
+
+  // Recent alerts (rejected/error invoices)
+  const alerts = invoices
+    .filter((i) => ["Rejected", "Error"].includes(displayStatus(i.status)))
+    .slice(0, 5);
+
+  const kpis = [
+    { label: "Total invoices", value: loading ? "..." : String(total) },
+    { label: "Accepted", value: loading ? "..." : String(accepted) },
+    { label: "Pending", value: loading ? "..." : String(pending) },
+    { label: "Rejected", value: loading ? "..." : String(rejected) },
+  ];
+
   return (
     <PortalLayout
       title="Live Compliance Dashboard"
@@ -12,13 +83,17 @@ export default function Home() {
         </>
       }
     >
+      {error === "NO_TENANT" && (
+        <section className="panel fade-up" style={{ padding: "1.5rem", marginBottom: "1.5rem", textAlign: "center" }}>
+          <h3>Configure tenant</h3>
+          <p className="muted">
+            Set <code>crocotax_tenant_id</code> in localStorage to load real data.
+          </p>
+        </section>
+      )}
+
       <section className="kpi-grid">
-        {[
-          { label: "Sent today", value: "1,248", change: "+12%" },
-          { label: "Pending", value: "318", change: "-4%" },
-          { label: "Rejected", value: "12", change: "+2" },
-          { label: "Avg time to accept", value: "42m", change: "-8m" }
-        ].map((kpi, idx) => (
+        {kpis.map((kpi, idx) => (
           <article
             key={kpi.label}
             className="kpi-card fade-up"
@@ -27,7 +102,6 @@ export default function Home() {
             <p className="kpi-label">{kpi.label}</p>
             <div className="kpi-row">
               <h2>{kpi.value}</h2>
-              <span className="kpi-change">{kpi.change}</span>
             </div>
             <div className="kpi-spark" />
           </article>
@@ -41,32 +115,33 @@ export default function Home() {
               <h3>Invoice flow</h3>
               <p>Real-time delivery funnel across tenants.</p>
             </div>
-            <div className="chips">
-              <button className="chip active">24h</button>
-              <button className="chip">7d</button>
-              <button className="chip">30d</button>
-            </div>
           </div>
-          <div className="flow-chart">
-            {[
-              { label: "Received", value: "3,802" },
-              { label: "Mapped", value: "3,791" },
-              { label: "Submitted", value: "3,760" },
-              { label: "Accepted", value: "3,712", highlight: true }
-            ].map((node, idx) => (
-              <div
-                key={node.label}
-                className="flow-step fade-up"
-                style={{ animationDelay: `${0.2 + idx * 0.08}s` }}
-              >
-                <div className={`flow-node ${node.highlight ? "highlight" : ""}`}>
-                  <p>{node.label}</p>
-                  <h4>{node.value}</h4>
+          {loading ? (
+            <p className="muted" style={{ padding: "2rem", textAlign: "center" }}>
+              Loading...
+            </p>
+          ) : (
+            <div className="flow-chart">
+              {[
+                { label: "Received", value: String(received) },
+                { label: "Mapped", value: String(mapped) },
+                { label: "Submitted", value: String(submitted) },
+                { label: "Accepted", value: String(accepted), highlight: true },
+              ].map((node, idx) => (
+                <div
+                  key={node.label}
+                  className="flow-step fade-up"
+                  style={{ animationDelay: `${0.2 + idx * 0.08}s` }}
+                >
+                  <div className={`flow-node ${node.highlight ? "highlight" : ""}`}>
+                    <p>{node.label}</p>
+                    <h4>{node.value}</h4>
+                  </div>
+                  {idx < 3 ? <div className="flow-connector" /> : null}
                 </div>
-                {idx < 3 ? <div className="flow-connector" /> : null}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </article>
 
         <article className="panel fade-up" style={{ animationDelay: "0.18s" }}>
@@ -75,26 +150,29 @@ export default function Home() {
               <h3>Recent alerts</h3>
               <p>Items that need attention.</p>
             </div>
-            <button className="ghost-btn small">View all</button>
+            <a className="ghost-btn small" href="/alerts">View all</a>
           </div>
           <div className="alert-list">
-            {[
-              { title: "Rejected invoice", meta: "INV-2026-9912 · ACP", tag: "Rejected" },
-              { title: "PDP timeout", meta: "GHL Lyon · 12m ago", tag: "Delayed" },
-              { title: "Missing VAT", meta: "INV-2026-9902", tag: "Action" }
-            ].map((alert, idx) => (
-              <div
-                key={alert.title}
-                className="alert-item fade-up"
-                style={{ animationDelay: `${0.24 + idx * 0.08}s` }}
-              >
-                <div>
-                  <p className="alert-title">{alert.title}</p>
-                  <p className="alert-meta">{alert.meta}</p>
-                </div>
-                <span className={`tag ${alert.tag.toLowerCase()}`}>{alert.tag}</span>
-              </div>
-            ))}
+            {loading ? (
+              <p className="muted" style={{ padding: "1rem" }}>Loading...</p>
+            ) : alerts.length === 0 ? (
+              <p className="muted" style={{ padding: "1rem" }}>No alerts at this time.</p>
+            ) : (
+              alerts.map((inv) => {
+                const label = displayStatus(inv.status);
+                return (
+                  <div key={inv.id} className="alert-item fade-up">
+                    <div>
+                      <p className="alert-title">{label} invoice</p>
+                      <p className="alert-meta">
+                        {inv.ghl_invoice_id ?? inv.id} &middot; {relativeTime(inv.updated_at)}
+                      </p>
+                    </div>
+                    <span className={`tag ${label.toLowerCase()}`}>{label}</span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </article>
       </section>
